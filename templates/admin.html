@@ -1,0 +1,1356 @@
+{% extends "base.html" %}
+
+{% block title %}ACLC College | Admin Dashboard - HIV Awareness Seminar{% endblock %}
+
+{% block extra_head %}
+<style>
+  .section-card {
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    background: #FFFFFF;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    margin-bottom: 24px;
+  }
+  .section-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #E2E8F0;
+    background: #F8FAFC;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+  }
+  .stat-box {
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: #F8FAFC;
+    text-align: center;
+    height: 100%;
+  }
+  .iframe-preview-wrapper {
+    position: relative;
+    width: 100%;
+    height: 360px;
+    overflow: hidden;
+    border: 2px solid #CBD5E1;
+    border-radius: 10px;
+    background: #0F172A;
+  }
+  .iframe-preview-wrapper iframe {
+    width: 200%;
+    height: 720px;
+    border: 0;
+    transform: scale(0.5);
+    transform-origin: 0 0;
+    pointer-events: none;
+  }
+  /* Toast Notifications */
+  .toast-container-custom {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 420px;
+  }
+  .toast-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .toast-success {
+    background: #F0FDF4;
+    border-left: 5px solid #16A34A;
+    color: #14532D;
+  }
+  .toast-danger {
+    background: #FEF2F2;
+    border-left: 5px solid #DC2626;
+    color: #7F1D1D;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top Navbar -->
+<header class="navbar navbar-expand-md bg-hiv-header border-bottom border-aclc-gold d-print-none">
+  <div class="container-xl py-2">
+    <div class="d-flex align-items-center">
+      <img src="/static/img/aclc-logo.png" alt="ACLC" width="42" height="42" class="rounded-circle me-3 border border-2 border-warning">
+      <div>
+        <div class="d-flex align-items-center gap-2">
+          <h3 class="mb-0 text-white fw-bold">Admin Dashboard</h3>
+          <span class="badge bg-hiv-crimson text-white fw-bold">HIV AWARENESS</span>
+        </div>
+        <small class="text-warning text-uppercase fw-bold" id="navEventTitle">{{ event_title }}</small>
+      </div>
+    </div>
+    <div class="navbar-nav flex-row order-md-last ms-auto align-items-center gap-2">
+      <a href="/admin" class="btn btn-light btn-sm fw-bold">Dashboard</a>
+      <a href="/admin/scanner" class="btn btn-warning btn-sm fw-bold text-dark">Scanner</a>
+      <a href="/projector" target="_blank" class="btn btn-gold btn-sm fw-bold">Projector</a>
+      <a href="/admin/logout" class="btn btn-outline-light btn-sm">Logout</a>
+    </div>
+  </div>
+</header>
+
+<div class="page-body my-4">
+  <div class="container-xl">
+
+    <!-- ================================================================= -->
+    <!-- SECTION 1: EVENT & EVALUATION CONTROL                             -->
+    <!-- ================================================================= -->
+    <div class="section-card">
+      <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <h3 class="mb-0 text-aclc-blue fw-bold">1. Event &amp; Evaluation Control</h3>
+          <small class="text-muted">Control active session, Time In / Time Out, Seminar Evaluation availability, and required minutes</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge {% if eval_open %}bg-hiv-crimson text-white{% else %}bg-secondary text-white{% endif %} fs-4 px-3 py-2" id="headerEvalStatusBadge">
+            Evaluation: {% if eval_open %}Open{% else %}Closed{% endif %}
+          </span>
+          <span class="badge {% if status == 'Time Out' %}bg-orange text-white{% elif status == 'Closed' %}bg-secondary text-white{% else %}bg-green text-white{% endif %} fs-4 px-3 py-2" id="headerActiveStatusBadge">
+            {{ session }} &middot; {{ status }}
+          </span>
+        </div>
+      </div>
+      <div class="card-body p-4">
+        <div class="row g-3 align-items-start">
+          
+          <!-- Session Selector -->
+          <div class="col-lg-3 col-md-6">
+            <label class="form-label fw-bold mb-1">Session</label>
+            <div class="btn-group w-100" role="group">
+              <button type="button" class="btn btn-session {% if session == 'Morning' %}btn-aclc{% else %}btn-outline-secondary{% endif %}" data-session="MORNING">Morning</button>
+              <button type="button" class="btn btn-session {% if session == 'Afternoon' %}btn-aclc{% else %}btn-outline-secondary{% endif %}" data-session="AFTERNOON">Afternoon</button>
+            </div>
+            <small class="text-muted d-block mt-1">Select active seminar half-day</small>
+          </div>
+
+          <!-- Status Selector -->
+          <div class="col-lg-3 col-md-6">
+            <label class="form-label fw-bold mb-1">Attendance Status</label>
+            <div class="btn-group w-100" role="group">
+              <button type="button" class="btn btn-status {% if status == 'Time In' %}btn-success text-white{% else %}btn-outline-secondary{% endif %}" data-status="IN">Time In</button>
+              <button type="button" class="btn btn-status {% if status == 'Time Out' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}" data-status="OUT">Time Out</button>
+              <button type="button" class="btn btn-status {% if status == 'Closed' %}btn-danger text-white{% else %}btn-outline-secondary{% endif %}" data-status="CLOSED">Closed</button>
+            </div>
+            <small class="text-muted d-block mt-1">Time In form vs Exit Scanner</small>
+          </div>
+
+          <!-- Evaluation Form Open / Close Toggle -->
+          <div class="col-lg-3 col-md-6">
+            <label class="form-label fw-bold mb-1 text-hiv-crimson">Seminar Evaluation Form</label>
+            <div class="btn-group w-100" role="group">
+              <button type="button" id="btnEvalOpen" class="btn {% if eval_open %}btn-hiv{% else %}btn-outline-secondary{% endif %}">Open Quiz</button>
+              <button type="button" id="btnEvalClose" class="btn {% if not eval_open %}btn-dark text-white fw-bold{% else %}btn-outline-secondary{% endif %}">Closed</button>
+            </div>
+            <small class="text-muted d-block mt-1">Reveals "Take Evaluation" on student passes</small>
+          </div>
+
+          <!-- Minimum Minutes -->
+          <div class="col-lg-3 col-md-6">
+            <label class="form-label fw-bold mb-1">Minimum Minutes for Eligibility</label>
+            <div class="input-group">
+              <input type="number" id="minDurationInput" class="form-control" value="{{ min_duration }}" min="1" max="600">
+              <span class="input-group-text">min</span>
+              <button type="button" id="btnSaveDuration" class="btn btn-aclc fw-bold">Save</button>
+            </div>
+            <small class="text-muted d-block mt-1">Required: <strong class="text-aclc-blue" id="minDurationHelperText">{{ min_duration_label }}</strong> + Evaluation</small>
+          </div>
+
+        </div>
+
+        <!-- Attendance & Evaluation KPI Counts -->
+        <div class="row g-3 mt-3">
+          <div class="col-md col-6">
+            <div class="stat-box">
+              <div class="text-muted small text-uppercase fw-bold">Total Attendees</div>
+              <div class="fs-1 fw-bold text-aclc-blue" id="kpiTotal">{{ stats.total }}</div>
+            </div>
+          </div>
+          <div class="col-md col-6">
+            <div class="stat-box">
+              <div class="text-muted small text-uppercase fw-bold">Timed In (Morn / Aft)</div>
+              <div class="fs-1 fw-bold text-dark"><span id="kpiMornIn">{{ stats.morning_in }}</span> / <span id="kpiAftIn">{{ stats.afternoon_in }}</span></div>
+            </div>
+          </div>
+          <div class="col-md col-6">
+            <div class="stat-box">
+              <div class="text-muted small text-uppercase fw-bold">Timed Out (Morn / Aft)</div>
+              <div class="fs-1 fw-bold text-dark"><span id="kpiMornOut">{{ stats.morning_out }}</span> / <span id="kpiAftOut">{{ stats.afternoon_out }}</span></div>
+            </div>
+          </div>
+          <div class="col-md col-6">
+            <div class="stat-box">
+              <div class="text-muted small text-uppercase fw-bold">Evaluations Submitted</div>
+              <div class="fs-1 fw-bold text-hiv-crimson" id="kpiEvalSubmitted">{{ stats.eval_submitted }}</div>
+              <div class="small text-muted">In Progress Drafts: <strong id="kpiEvalDrafts">{{ stats.eval_in_progress }}</strong></div>
+            </div>
+          </div>
+          <div class="col-md col-12">
+            <div class="stat-box border-success">
+              <div class="text-muted small text-uppercase fw-bold">Certificate Approved</div>
+              <div class="fs-1 fw-bold text-success" id="kpiEligible">{{ stats.eligible }}</div>
+              <div class="small text-muted">Duration Met (<span id="kpiAttEligible">{{ stats.attendance_eligible }}</span>) + Evaluation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SECTION 2: ATTENDEES                                              -->
+    <!-- ================================================================= -->
+    <div class="section-card">
+      <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div>
+            <h3 class="mb-0 text-aclc-blue fw-bold">2. Attendees &amp; Evaluation Status</h3>
+            <small class="text-muted">Live feed of attendee records &middot; View QR pass, inspect evaluation answers, or edit records</small>
+          </div>
+          <button type="button" class="btn btn-aclc btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalManualAdd">
+            Add Attendee
+          </button>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <input type="text" id="tableSearch" class="form-control form-control-sm" placeholder="Search ID, name, section...">
+          <select id="filterLevel" class="form-select form-select-sm" style="width: auto;">
+            <option value="">All Categories</option>
+            <option value="SHS">SHS</option>
+            <option value="COLLEGE">College</option>
+            <option value="NON_STUDENT">Guest</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-vcenter table-hover card-table mb-0">
+          <thead>
+            <tr>
+              <th>Student ID</th>
+              <th>Name</th>
+              <th>Section</th>
+              <th>Category</th>
+              <th>Time In</th>
+              <th>Time Out</th>
+              <th>Minutes</th>
+              <th>Evaluation</th>
+              <th>Certificate</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="attendeesTableBody">
+            {% for a in attendees %}
+            <tr id="row-{{ a.student_id }}">
+              <td class="font-monospace fw-bold">{{ a.student_id }}</td>
+              <td class="fw-bold">{{ a.full_name }}</td>
+              <td><span class="badge bg-secondary-lt">{{ a.section }}</span></td>
+              <td>
+                {% if a.level == 'SHS' %}
+                  <span class="badge bg-yellow-lt">SHS</span>
+                {% elif a.level == 'COLLEGE' %}
+                  <span class="badge bg-blue-lt">College</span>
+                {% else %}
+                  <span class="badge bg-secondary-lt">Guest</span>
+                {% endif %}
+              </td>
+              <td class="small">{{ a.primary_in_fmt }}</td>
+              <td class="small">{{ a.primary_out_fmt }}</td>
+              <td class="small">{{ a.primary_duration_min }} min</td>
+              <td>
+                {% if a.eval_status == 'SUBMITTED' %}
+                  <span class="badge bg-green text-white">Submitted{% if a.eval_avg %} ({{ a.eval_avg }}){% endif %}</span>
+                {% elif a.eval_status == 'IN_PROGRESS' %}
+                  <span class="badge bg-warning text-dark">In Progress</span>
+                {% else %}
+                  <span class="badge bg-secondary-lt">Pending</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if a.is_eligible %}
+                  <span class="badge bg-green text-white">Approved</span>
+                {% elif a.attendance_eligible and a.eval_status != 'SUBMITTED' %}
+                  <span class="badge bg-warning-lt text-warning">Needs Eval</span>
+                {% elif a.eval_status == 'SUBMITTED' and not a.attendance_eligible %}
+                  <span class="badge bg-azure-lt text-azure">Needs Time-Out</span>
+                {% else %}
+                  <span class="badge bg-secondary-lt">Pending</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <div class="btn-group btn-group-sm">
+                  <button type="button" class="btn btn-outline-primary btn-view-pass"
+                          data-id="{{ a.student_id }}"
+                          data-name="{{ a.full_name }}"
+                          data-section="{{ a.section }}">
+                    Pass
+                  </button>
+                  <button type="button" class="btn btn-outline-info btn-view-eval"
+                          data-id="{{ a.student_id }}"
+                          data-name="{{ a.full_name }}">
+                    Eval
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-edit-attendee"
+                          data-id="{{ a.student_id }}"
+                          data-last-name="{{ a.last_name or '' }}"
+                          data-first-name="{{ a.first_name or '' }}"
+                          data-middle-name="{{ a.middle_name or '' }}"
+                          data-sex="{{ a.sex }}"
+                          data-age="{{ a.age }}"
+                          data-email="{{ a.email }}"
+                          data-level="{{ a.level }}"
+                          data-section="{{ a.section }}"
+                          data-morning-in="{{ a.morning_in or '' }}"
+                          data-morning-out="{{ a.morning_out or '' }}"
+                          data-afternoon-in="{{ a.afternoon_in or '' }}"
+                          data-afternoon-out="{{ a.afternoon_out or '' }}"
+                          data-eval-status="{{ a.eval_status or 'PENDING' }}"
+                          data-eligible="{{ 1 if a.is_eligible else 0 }}">
+                    Edit
+                  </button>
+                  <button type="button" class="btn btn-outline-danger btn-delete-attendee"
+                          data-id="{{ a.student_id }}"
+                          data-name="{{ a.full_name }}">
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr id="emptyTableRow">
+              <td colspan="10" class="text-center text-muted py-4">No attendees recorded yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SECTION 3: DISPLAY SETTINGS & LIVE PREVIEW                        -->
+    <!-- ================================================================= -->
+    <div class="section-card">
+      <div class="section-header">
+        <h3 class="mb-0 text-aclc-blue fw-bold">3. Display Settings</h3>
+        <small class="text-muted">Configure event details, Wi-Fi, and QR codes shown on the Student Page and Projector</small>
+      </div>
+      <div class="card-body p-4">
+        <form id="displaySettingsForm">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Event Title</label>
+              <input type="text" class="form-control" id="cfgEventTitle" value="{{ event_title }}" maxlength="150" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Student Page URL <span class="text-muted fw-normal small">(Leave blank to auto-detect IP)</span></label>
+              <input type="text" class="form-control font-monospace" id="cfgKioskUrl" value="{{ kiosk_url }}" placeholder="{{ base_url }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Wi-Fi Name (SSID)</label>
+              <input type="text" class="form-control" id="cfgWifiSsid" value="{{ wifi_ssid or 'Event_Attendance' }}" maxlength="64">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Wi-Fi Password</label>
+              <input type="text" class="form-control" id="cfgWifiPassword" value="{{ wifi_password }}" placeholder="Leave blank if open" maxlength="64">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Projector QR Visibility</label>
+              <div class="d-flex gap-3 pt-2">
+                <label class="form-check">
+                  <input class="form-check-input" type="checkbox" id="cfgShowWifiQr" {% if proj_show_wifi_qr %}checked{% endif %}>
+                  <span class="form-check-label">Show Wi-Fi QR</span>
+                </label>
+                <label class="form-check">
+                  <input class="form-check-input" type="checkbox" id="cfgShowFormQr" {% if proj_show_form_qr %}checked{% endif %}>
+                  <span class="form-check-label">Show Student Page QR</span>
+                </label>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label fw-bold">Announcement</label>
+              <input type="text" class="form-control" id="cfgAnnouncement" value="{{ proj_announcement or kiosk_announcement }}" placeholder="Optional notice shown on the Student Page and Projector" maxlength="300">
+            </div>
+            <div class="col-12">
+              <button type="submit" id="btnSaveDisplay" class="btn btn-aclc fw-bold px-4">Save</button>
+            </div>
+          </div>
+        </form>
+
+        <!-- Real-Page Live Previews (Iframes of actual Projector and Student Page) -->
+        <div class="row g-4 mt-3 pt-3 border-top">
+          <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold text-dark small text-uppercase">Projector Preview (Live Page)</span>
+              <a href="/projector" target="_blank" class="small text-aclc-blue fw-bold">Open Projector</a>
+            </div>
+            <div class="iframe-preview-wrapper">
+              <iframe id="previewProjectorIframe" src="/projector"></iframe>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold text-dark small text-uppercase">Student Page Preview (Live Page)</span>
+              <a href="/" target="_blank" class="small text-aclc-blue fw-bold">Open Student Page</a>
+            </div>
+            <div class="iframe-preview-wrapper">
+              <iframe id="previewStudentIframe" src="/"></iframe>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SECTION 4: REPORTS, EVALUATION TALLY & CSV EXPORTS                -->
+    <!-- ================================================================= -->
+    <div class="section-card">
+      <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <h3 class="mb-0 text-aclc-blue fw-bold">4. Reports, Seminar Evaluation Tally &amp; Exports</h3>
+          <small class="text-muted">End-of-day evaluation summary, auto-tally for unfinished drafts, demographics, and CSV downloads</small>
+        </div>
+        <button type="button" id="btnTallyEvaluations" class="btn btn-hiv fw-bold">
+          Tally &amp; Finalize All Unsubmitted Drafts (<span id="btnTallyDraftCount">{{ stats.eval_in_progress }}</span>)
+        </button>
+      </div>
+      <div class="card-body p-4">
+
+        <!-- Seminar Evaluation Summary Banner -->
+        <div class="p-3 bg-light rounded border mb-4">
+          <div class="row g-3 align-items-center">
+            <div class="col-md-3 text-center border-end">
+              <div class="text-muted small text-uppercase fw-bold">Overall Seminar Rating</div>
+              <div class="display-5 fw-bold text-hiv-crimson"><span id="txtEvalOverallAvg">{{ stats.evaluations.overall_avg }}</span> <small class="fs-4 text-muted">/ 5.0</small></div>
+              <div class="small text-muted">Across <strong id="txtEvalSubCnt">{{ stats.evaluations.submitted }}</strong> submitted forms</div>
+            </div>
+            <div class="col-md-9">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong class="text-dark small text-uppercase">Part I Criteria Averages (1 to 5 Scale)</strong>
+                <span class="text-muted small">Unfinished drafts with answers can be tallied using the button above</span>
+              </div>
+              <div class="row g-2 small">
+                <div class="col-md-6 d-flex justify-content-between border-bottom pb-1">
+                  <span>1. Objectives clearly presented</span>
+                  <strong id="avgCrit1">{{ stats.evaluations.criteria_avgs[0] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between border-bottom pb-1">
+                  <span>6. Encouraged active participation</span>
+                  <strong id="avgCrit6">{{ stats.evaluations.criteria_avgs[5] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between border-bottom pb-1">
+                  <span>2. Speaker knowledge of HIV</span>
+                  <strong id="avgCrit2">{{ stats.evaluations.criteria_avgs[1] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between border-bottom pb-1">
+                  <span>7. Increased awareness of prevention/testing</span>
+                  <strong id="avgCrit7">{{ stats.evaluations.criteria_avgs[6] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between border-bottom pb-1">
+                  <span>3. Info accurate &amp; easy to understand</span>
+                  <strong id="avgCrit3">{{ stats.evaluations.criteria_avgs[2] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between border-bottom pb-1">
+                  <span>8. Respect &amp; non-discrimination (PLHIV)</span>
+                  <strong id="avgCrit8">{{ stats.evaluations.criteria_avgs[7] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between border-bottom pb-1">
+                  <span>4. Clear understanding of HIV &amp; prevention</span>
+                  <strong id="avgCrit4">{{ stats.evaluations.criteria_avgs[3] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between border-bottom pb-1">
+                  <span>9. Materials supported understanding</span>
+                  <strong id="avgCrit9">{{ stats.evaluations.criteria_avgs[8] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between">
+                  <span>5. Addressed misconceptions &amp; stigma</span>
+                  <strong id="avgCrit5">{{ stats.evaluations.criteria_avgs[4] }}</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-between">
+                  <span>10. Overall informative &amp; beneficial</span>
+                  <strong id="avgCrit10">{{ stats.evaluations.criteria_avgs[9] }}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 align-items-center">
+          <div class="col-md-4">
+            <h4 class="fw-bold text-dark mb-2">Sex Breakdown</h4>
+            <div class="d-flex justify-content-between small mb-1"><span>Female</span><strong id="txtFemaleCount">{{ stats.sex.female }}</strong></div>
+            <div class="d-flex justify-content-between small mb-1"><span>Male</span><strong id="txtMaleCount">{{ stats.sex.male }}</strong></div>
+            <div class="d-flex justify-content-between small"><span>Prefer not to say / Other</span><strong id="txtOtherCount">{{ stats.sex.other }}</strong></div>
+          </div>
+          <div class="col-md-4">
+            <h4 class="fw-bold text-dark mb-2">Category Breakdown</h4>
+            <div class="d-flex justify-content-between small mb-1"><span>Senior High (SHS)</span><strong id="txtShsCount">{{ stats.level.shs }}</strong></div>
+            <div class="d-flex justify-content-between small mb-1"><span>College Level</span><strong id="txtCollegeCount">{{ stats.level.college }}</strong></div>
+            <div class="d-flex justify-content-between small"><span>Guest / Other</span><strong id="txtGuestCount">{{ stats.level.non_student }}</strong></div>
+          </div>
+          <div class="col-md-4 d-flex flex-column gap-2">
+            <a href="/api/export/evaluation-csv" class="btn btn-hiv fw-bold w-100">Download Evaluation Responses CSV</a>
+            <a href="/api/export/deped-csv" class="btn btn-aclc fw-bold w-100">Download Attendance Master CSV</a>
+            <a href="/api/export/certificate-csv" class="btn btn-gold fw-bold w-100">Download Certificate Eligible CSV</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attribution Footer -->
+    <div class="text-center text-muted small mt-3 fw-bold">
+      Prepared by: CS31A
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal: Pass Preview -->
+<div class="modal fade" id="passPreviewModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content text-center p-3">
+      <div class="modal-header border-0 pb-0 justify-content-between">
+        <span class="badge bg-gold text-dark small font-monospace">PASS</span>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body py-2">
+        <div class="p-2 bg-white rounded border d-inline-block my-2">
+          <img id="modalPassQrImg" src="" alt="Pass QR" width="200" height="200" class="img-fluid">
+        </div>
+        <h3 id="modalStudentName" class="text-aclc-blue fw-bold mb-0"></h3>
+        <div id="modalStudentIdSec" class="text-dark fw-bold font-monospace small mb-2"></div>
+        <div class="badge bg-blue-lt text-aclc-blue px-2 py-1 mb-1">Show this pass for Time Out</div>
+        <div class="text-muted small">Certificate requires <strong id="modalPassDurText">{{ min_duration_label }}</strong> + Evaluation</div>
+      </div>
+      <div class="modal-footer border-0 pt-2">
+        <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: View Student Evaluation Detail -->
+<div class="modal fade" id="modalViewEvaluation" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content shadow border-0">
+      <div class="modal-header bg-hiv-header text-white">
+        <h5 class="modal-title fw-bold">Seminar Evaluation Response</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4" id="modalViewEvaluationBody">
+        <!-- Loaded dynamically -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Attendee -->
+<div class="modal fade" id="modalManualAdd" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content shadow border-0">
+      <div class="modal-header bg-aclc-blue text-white">
+        <h5 class="modal-title fw-bold">Add Attendee</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formManualAdd" autocomplete="off">
+        <div class="modal-body p-4">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label required">Student ID</label>
+              <input type="text" class="form-control text-uppercase font-monospace" id="manStudentId" placeholder="e.g. 2024-01234" maxlength="50" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Section</label>
+              <input type="text" class="form-control text-uppercase" id="manSection" placeholder="e.g. 11-ICT-A" maxlength="50" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Last Name</label>
+              <input type="text" class="form-control" id="manLastName" maxlength="100" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">First Name</label>
+              <input type="text" class="form-control" id="manFirstName" maxlength="100" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Middle Name</label>
+              <input type="text" class="form-control" id="manMiddleName" maxlength="100">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Sex</label>
+              <select class="form-select" id="manSex" required>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Age</label>
+              <input type="number" class="form-control" id="manAge" value="18" min="10" max="120" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Category</label>
+              <select class="form-select" id="manLevel" required>
+                <option value="SHS">Senior High (SHS)</option>
+                <option value="COLLEGE">College Level</option>
+                <option value="NON_STUDENT">Guest / Other</option>
+              </select>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label required">Email</label>
+              <input type="email" class="form-control" id="manEmail" placeholder="name@gmail.com" maxlength="120" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Session</label>
+              <select class="form-select" id="manPhase" required>
+                <option value="MORNING_IN">Morning</option>
+                <option value="AFTERNOON_IN">Afternoon</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Time In (Optional)</label>
+              <input type="datetime-local" class="form-control" id="manTimeIn">
+              <small class="text-muted">Leave blank to use current time</small>
+            </div>
+          </div>
+          <div id="manualAddAlert" class="small mt-3 d-none fw-bold"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" id="btnSubmitManualAdd" class="btn btn-aclc fw-bold">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit Attendee -->
+<div class="modal fade" id="modalEditAttendee" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content shadow border-0">
+      <div class="modal-header bg-aclc-blue text-white">
+        <h5 class="modal-title fw-bold">Edit Attendee</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formEditAttendee" autocomplete="off">
+        <div class="modal-body p-4">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Student ID</label>
+              <input type="text" class="form-control font-monospace bg-light" id="editStudentId" readonly>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Last Name</label>
+              <input type="text" class="form-control" id="editLastName" maxlength="100" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">First Name</label>
+              <input type="text" class="form-control" id="editFirstName" maxlength="100" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Middle Name</label>
+              <input type="text" class="form-control" id="editMiddleName" maxlength="100">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Sex</label>
+              <select class="form-select" id="editSex" required>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Age</label>
+              <input type="number" class="form-control" id="editAge" min="10" max="120" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Category</label>
+              <select class="form-select" id="editLevel" required>
+                <option value="SHS">Senior High (SHS)</option>
+                <option value="COLLEGE">College Level</option>
+                <option value="NON_STUDENT">Guest / Other</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Section</label>
+              <input type="text" class="form-control" id="editSection" maxlength="50" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Email</label>
+              <input type="email" class="form-control" id="editEmail" maxlength="120" required>
+            </div>
+            <div class="col-12"><hr class="my-1"></div>
+            <div class="col-md-6">
+              <label class="form-label">Morning Time In</label>
+              <input type="text" class="form-control font-monospace" id="editMorningIn" placeholder="YYYY-MM-DD HH:MM:SS">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Morning Time Out</label>
+              <input type="text" class="form-control font-monospace" id="editMorningOut" placeholder="YYYY-MM-DD HH:MM:SS">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Afternoon Time In</label>
+              <input type="text" class="form-control font-monospace" id="editAfternoonIn" placeholder="YYYY-MM-DD HH:MM:SS">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Afternoon Time Out</label>
+              <input type="text" class="form-control font-monospace" id="editAfternoonOut" placeholder="YYYY-MM-DD HH:MM:SS">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Evaluation Status</label>
+              <select class="form-select" id="editEvalStatus">
+                <option value="PENDING">Pending</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="SUBMITTED">Submitted</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Certificate Approval Override</label>
+              <select class="form-select" id="editEligible">
+                <option value="1">Approved (Eligible)</option>
+                <option value="0">Not Eligible</option>
+              </select>
+            </div>
+          </div>
+          <div id="editAttendeeAlert" class="small mt-3 d-none fw-bold"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" id="btnSubmitEditAttendee" class="btn btn-aclc fw-bold">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Delete Attendee -->
+<div class="modal fade" id="modalDeleteConfirm" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content shadow border-0">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title fw-bold">Delete Attendee</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center p-4">
+        <p class="mb-2">Delete attendance &amp; evaluation record for:</p>
+        <h4 class="text-danger fw-bold" id="delStudentName"></h4>
+        <div class="font-monospace text-muted small" id="delStudentId"></div>
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btnConfirmDelete" class="btn btn-danger fw-bold">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  // Toast helper
+  function showToast(message, type = "success") {
+    let container = document.getElementById("adminToastContainer");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "adminToastContainer";
+      container.className = "toast-container-custom";
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement("div");
+    toast.className = `toast-item toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 3500);
+  }
+
+  function checkAuthRedirect(resp) {
+    if (resp.status === 401) {
+      showToast("Session expired. Redirecting to login...", "danger");
+      setTimeout(() => {
+        window.location.href = "/admin/login?next=/admin";
+      }, 1000);
+      return true;
+    }
+    return false;
+  }
+
+  function refreshPreviewIframes() {
+    const projIframe = document.getElementById("previewProjectorIframe");
+    const studIframe = document.getElementById("previewStudentIframe");
+    if (projIframe && projIframe.contentWindow) projIframe.contentWindow.location.reload();
+    if (studIframe && studIframe.contentWindow) studIframe.contentWindow.location.reload();
+  }
+
+  // Event Control: Session + Status State
+  let activeSession = "{{ 'AFTERNOON' if session == 'Afternoon' else 'MORNING' }}";
+  let activeStatus = "{{ 'OUT' if status == 'Time Out' else ('CLOSED' if status == 'Closed' else 'IN') }}";
+
+  async function applyPhaseChange() {
+    let targetPhase = "LOCKED";
+    if (activeStatus !== "CLOSED") {
+      targetPhase = `${activeSession}_${activeStatus}`;
+    }
+    const resp = await fetch("/api/admin/set-phase", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase: targetPhase })
+    });
+    if (checkAuthRedirect(resp)) return;
+    if (resp.ok) {
+      window.location.reload();
+    } else {
+      showToast("Failed to update status.", "danger");
+    }
+  }
+
+  document.querySelectorAll(".btn-session").forEach(btn => {
+    btn.addEventListener("click", function() {
+      activeSession = this.getAttribute("data-session");
+      if (activeStatus === "CLOSED") activeStatus = "IN";
+      applyPhaseChange();
+    });
+  });
+
+  document.querySelectorAll(".btn-status").forEach(btn => {
+    btn.addEventListener("click", function() {
+      activeStatus = this.getAttribute("data-status");
+      applyPhaseChange();
+    });
+  });
+
+  // Evaluation Open / Close Toggle
+  const btnEvalOpen = document.getElementById("btnEvalOpen");
+  const btnEvalClose = document.getElementById("btnEvalClose");
+  const headerEvalStatusBadge = document.getElementById("headerEvalStatusBadge");
+
+  async function setEvalAvailability(openState) {
+    const resp = await fetch("/api/admin/set-eval-open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eval_open: openState })
+    });
+    if (checkAuthRedirect(resp)) return;
+    if (resp.ok) {
+      if (openState) {
+        btnEvalOpen.className = "btn btn-hiv";
+        btnEvalClose.className = "btn btn-outline-secondary";
+        headerEvalStatusBadge.textContent = "Evaluation: Open";
+        headerEvalStatusBadge.className = "badge bg-hiv-crimson text-white fs-4 px-3 py-2";
+        showToast("Seminar Evaluation Form is now OPEN on all student passes.", "success");
+      } else {
+        btnEvalOpen.className = "btn btn-outline-secondary";
+        btnEvalClose.className = "btn btn-dark text-white fw-bold";
+        headerEvalStatusBadge.textContent = "Evaluation: Closed";
+        headerEvalStatusBadge.className = "badge bg-secondary text-white fs-4 px-3 py-2";
+        showToast("Seminar Evaluation Form is now CLOSED.", "success");
+      }
+      refreshPreviewIframes();
+    } else {
+      showToast("Failed to update evaluation availability.", "danger");
+    }
+  }
+
+  if (btnEvalOpen) btnEvalOpen.addEventListener("click", () => setEvalAvailability(true));
+  if (btnEvalClose) btnEvalClose.addEventListener("click", () => setEvalAvailability(false));
+
+  // End-of-Day Tally & Finalize All Unsubmitted Drafts
+  const btnTallyEvaluations = document.getElementById("btnTallyEvaluations");
+  if (btnTallyEvaluations) {
+    btnTallyEvaluations.addEventListener("click", async function() {
+      btnTallyEvaluations.disabled = true;
+      const origHtml = btnTallyEvaluations.innerHTML;
+      btnTallyEvaluations.textContent = "Tallying & Finalizing...";
+
+      try {
+        const resp = await fetch("/api/admin/tally-evaluations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        if (checkAuthRedirect(resp)) return;
+        const data = await resp.json();
+        if (resp.ok && data.status === "success") {
+          showToast(data.message || "Tallied all in-progress evaluations.", "success");
+          await refreshKpiStats();
+        } else {
+          showToast(data.message || "Failed to tally evaluations.", "danger");
+        }
+      } catch(e) {
+        showToast("Network error tallying evaluations.", "danger");
+      } finally {
+        btnTallyEvaluations.disabled = false;
+        btnTallyEvaluations.innerHTML = origHtml;
+        await refreshKpiStats();
+      }
+    });
+  }
+
+  // Save Minimum Duration
+  document.getElementById("btnSaveDuration").addEventListener("click", async function() {
+    const mins = parseInt(document.getElementById("minDurationInput").value, 10);
+    const resp = await fetch("/api/admin/set-duration", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ minutes: mins })
+    });
+    if (checkAuthRedirect(resp)) return;
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.label) {
+        const helperEl = document.getElementById("minDurationHelperText");
+        if (helperEl) helperEl.textContent = data.label;
+        const modalDurEl = document.getElementById("modalPassDurText");
+        if (modalDurEl) modalDurEl.textContent = data.label;
+      }
+      refreshPreviewIframes();
+      await refreshKpiStats();
+      showToast(`Required duration set to ${data.label || (mins + ' mins')}.`, "success");
+    } else {
+      showToast("Failed to save minimum duration.", "danger");
+    }
+  });
+
+  // Display Settings Form
+  const displaySettingsForm = document.getElementById("displaySettingsForm");
+  if (displaySettingsForm) {
+    displaySettingsForm.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById("btnSaveDisplay");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+
+      const titleVal = document.getElementById("cfgEventTitle").value.trim();
+      const urlVal = document.getElementById("cfgKioskUrl").value.trim();
+      const ssidVal = document.getElementById("cfgWifiSsid").value.trim();
+      const passVal = document.getElementById("cfgWifiPassword").value.trim();
+      const showWifi = document.getElementById("cfgShowWifiQr").checked;
+      const showForm = document.getElementById("cfgShowFormQr").checked;
+      const annVal = document.getElementById("cfgAnnouncement").value.trim();
+
+      try {
+        const r1 = await fetch("/api/admin/set-kiosk-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_title: titleVal,
+            active_session_label: "{{ active_session_label }}",
+            current_phase: "{{ current_phase }}",
+            event_date: "{{ event_date }}",
+            venue: "{{ venue }}",
+            kiosk_announcement: annVal,
+            terms_and_conditions: ""
+          })
+        });
+        if (checkAuthRedirect(r1)) return;
+
+        const r2 = await fetch("/api/admin/set-projector-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            proj_show_form_qr: showForm,
+            proj_show_wifi_qr: showWifi,
+            wifi_ssid: ssidVal,
+            wifi_password: passVal,
+            kiosk_url: urlVal,
+            proj_announcement: annVal
+          })
+        });
+        if (checkAuthRedirect(r2)) return;
+
+        if (r1.ok && r2.ok) {
+          document.getElementById("navEventTitle").textContent = titleVal;
+          refreshPreviewIframes();
+          showToast("Display settings saved.", "success");
+        } else {
+          showToast("Failed to save display settings.", "danger");
+        }
+      } catch(err) {
+        showToast("Network error saving settings.", "danger");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save";
+      }
+    });
+  }
+
+  // Table Search & Filter
+  const tableSearch = document.getElementById("tableSearch");
+  const filterLevel = document.getElementById("filterLevel");
+  const tableBody = document.getElementById("attendeesTableBody");
+
+  function filterTable() {
+    const q = tableSearch.value.toLowerCase();
+    const lvl = filterLevel.value.toLowerCase();
+    const rows = tableBody.getElementsByTagName("tr");
+    for (let row of rows) {
+      if (row.id === "emptyTableRow") continue;
+      const text = row.innerText.toLowerCase();
+      const matchQ = text.includes(q);
+      const matchL = lvl === "" || text.includes(lvl);
+      row.style.display = (matchQ && matchL) ? "" : "none";
+    }
+  }
+  tableSearch.addEventListener("input", filterTable);
+  filterLevel.addEventListener("change", filterTable);
+
+  function escapeAttr(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  // Event delegation for Pass, Eval, Edit, and Delete buttons in Attendees Table
+  let pendingDeleteSid = null;
+  const formEditAttendee = document.getElementById("formEditAttendee");
+  const editAttendeeAlert = document.getElementById("editAttendeeAlert");
+
+  tableBody.addEventListener("click", async function(e) {
+    const passBtn = e.target.closest(".btn-view-pass");
+    if (passBtn) {
+      const id = passBtn.getAttribute("data-id");
+      const name = passBtn.getAttribute("data-name");
+      const section = passBtn.getAttribute("data-section");
+      document.getElementById("modalStudentName").textContent = name;
+      document.getElementById("modalStudentIdSec").textContent = `${id} \u00B7 ${section}`;
+      document.getElementById("modalPassQrImg").src = `/api/qr/student-pass?student_id=${encodeURIComponent(id)}`;
+      window.openModalById("passPreviewModal");
+      return;
+    }
+
+    const evalBtn = e.target.closest(".btn-view-eval");
+    if (evalBtn) {
+      const id = evalBtn.getAttribute("data-id");
+      const name = evalBtn.getAttribute("data-name");
+      const bodyEl = document.getElementById("modalViewEvaluationBody");
+      bodyEl.innerHTML = `<div class="text-center text-muted py-4">Loading evaluation for ${escapeAttr(name)}...</div>`;
+      window.openModalById("modalViewEvaluation");
+
+      try {
+        const resp = await fetch(`/api/admin/evaluation-detail?student_id=${encodeURIComponent(id)}`);
+        if (checkAuthRedirect(resp)) return;
+        const data = await resp.json();
+        if (!data.evaluation) {
+          bodyEl.innerHTML = `
+            <div class="text-center py-4">
+              <h4 class="text-dark fw-bold mb-1">${escapeAttr(name)} (${escapeAttr(id)})</h4>
+              <p class="text-muted mb-0">This attendee has not started the Seminar Evaluation Form yet.</p>
+            </div>
+          `;
+          return;
+        }
+        const ev = data.evaluation;
+        bodyEl.innerHTML = `
+          <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+            <div>
+              <h4 class="text-aclc-blue fw-bold mb-0">${escapeAttr(name)} (${escapeAttr(id)})</h4>
+              <small class="text-muted">Status: <strong>${escapeAttr(ev.status)}</strong> ${ev.is_auto_tallied ? '(Auto-Tallied Draft)' : ''}</small>
+            </div>
+            <div class="badge bg-hiv-crimson text-white fs-4 px-3 py-1">Avg Rating: ${ev.q1_avg || 0} / 5.0</div>
+          </div>
+          <h5 class="fw-bold text-hiv-crimson mb-2">I. Seminar Ratings (1 to 5)</h5>
+          <div class="row g-2 small mb-3">
+            <div class="col-6">1. Objectives clear: <strong>${ev.q1_1 || '-'}</strong></div>
+            <div class="col-6">6. Active participation: <strong>${ev.q1_6 || '-'}</strong></div>
+            <div class="col-6">2. Speaker knowledge: <strong>${ev.q1_2 || '-'}</strong></div>
+            <div class="col-6">7. Prevention &amp; testing: <strong>${ev.q1_7 || '-'}</strong></div>
+            <div class="col-6">3. Accurate &amp; clear: <strong>${ev.q1_3 || '-'}</strong></div>
+            <div class="col-6">8. Non-discrimination: <strong>${ev.q1_8 || '-'}</strong></div>
+            <div class="col-6">4. Transmission &amp; prev.: <strong>${ev.q1_4 || '-'}</strong></div>
+            <div class="col-6">9. Materials helpful: <strong>${ev.q1_9 || '-'}</strong></div>
+            <div class="col-6">5. Addressed stigma: <strong>${ev.q1_5 || '-'}</strong></div>
+            <div class="col-6">10. Overall beneficial: <strong>${ev.q1_10 || '-'}</strong></div>
+          </div>
+          <h5 class="fw-bold text-hiv-crimson mb-2">II. Learning Outcomes</h5>
+          <div class="small mb-2"><strong>1. Important information learned:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q2_1 || '-')}</div></div>
+          <div class="small mb-2"><strong>2. Misconception clarified:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q2_2 || '-')}</div></div>
+          <div class="small mb-3"><strong>3. Application in daily life:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q2_3 || '-')}</div></div>
+          <h5 class="fw-bold text-hiv-crimson mb-2">III. Overall Assessment</h5>
+          <div class="small mb-2"><strong>1. Most helpful part:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q3_1 || '-')}</div></div>
+          <div class="small mb-2"><strong>2. Topics to learn more about:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q3_2 || '-')}</div></div>
+          <div class="small"><strong>3. Suggestions for improvement:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q3_3 || '-')}</div></div>
+        `;
+      } catch(err) {
+        bodyEl.innerHTML = `<div class="text-danger text-center py-3">Error loading evaluation details.</div>`;
+      }
+      return;
+    }
+
+    const editBtn = e.target.closest(".btn-edit-attendee");
+    if (editBtn) {
+      document.getElementById("editStudentId").value = editBtn.getAttribute("data-id") || "";
+      document.getElementById("editLastName").value = editBtn.getAttribute("data-last-name") || "";
+      document.getElementById("editFirstName").value = editBtn.getAttribute("data-first-name") || "";
+      document.getElementById("editMiddleName").value = editBtn.getAttribute("data-middle-name") || "";
+      document.getElementById("editSex").value = editBtn.getAttribute("data-sex") || "Male";
+      document.getElementById("editAge").value = editBtn.getAttribute("data-age") || "18";
+      document.getElementById("editLevel").value = editBtn.getAttribute("data-level") || "SHS";
+      document.getElementById("editSection").value = editBtn.getAttribute("data-section") || "";
+      document.getElementById("editEmail").value = editBtn.getAttribute("data-email") || "";
+      document.getElementById("editMorningIn").value = editBtn.getAttribute("data-morning-in") || "";
+      document.getElementById("editMorningOut").value = editBtn.getAttribute("data-morning-out") || "";
+      document.getElementById("editAfternoonIn").value = editBtn.getAttribute("data-afternoon-in") || "";
+      document.getElementById("editAfternoonOut").value = editBtn.getAttribute("data-afternoon-out") || "";
+      document.getElementById("editEvalStatus").value = editBtn.getAttribute("data-eval-status") || "PENDING";
+      document.getElementById("editEligible").value = editBtn.getAttribute("data-eligible") || "0";
+      editAttendeeAlert.className = "small mt-3 d-none fw-bold";
+      window.openModalById("modalEditAttendee");
+      return;
+    }
+
+    const delBtn = e.target.closest(".btn-delete-attendee");
+    if (delBtn) {
+      pendingDeleteSid = delBtn.getAttribute("data-id");
+      document.getElementById("delStudentId").textContent = pendingDeleteSid;
+      document.getElementById("delStudentName").textContent = delBtn.getAttribute("data-name");
+      window.openModalById("modalDeleteConfirm");
+      return;
+    }
+  });
+
+  // Add Attendee Modal
+  const formManualAdd = document.getElementById("formManualAdd");
+  const manualAddAlert = document.getElementById("manualAddAlert");
+  if (formManualAdd) {
+    formManualAdd.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      manualAddAlert.className = "small mt-3 d-none fw-bold";
+      const rawTime = document.getElementById("manTimeIn").value;
+      const formattedTime = rawTime ? (rawTime.replace("T", " ") + (rawTime.length === 16 ? ":00" : "")) : null;
+
+      const payload = {
+        student_id: document.getElementById("manStudentId").value.trim().toUpperCase(),
+        last_name: document.getElementById("manLastName").value.trim(),
+        first_name: document.getElementById("manFirstName").value.trim(),
+        middle_name: document.getElementById("manMiddleName").value.trim() || "N/A",
+        sex: document.getElementById("manSex").value,
+        age: parseInt(document.getElementById("manAge").value, 10),
+        level: document.getElementById("manLevel").value,
+        section: document.getElementById("manSection").value.trim(),
+        email: document.getElementById("manEmail").value.trim().toLowerCase(),
+        phase: document.getElementById("manPhase").value,
+        time_in: formattedTime
+      };
+
+      const resp = await fetch("/api/admin/manual-add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (checkAuthRedirect(resp)) return;
+      const data = await resp.json();
+      if (!resp.ok || data.status === "error") {
+        manualAddAlert.textContent = data.message || "Failed to add attendee.";
+        manualAddAlert.className = "small mt-3 text-danger fw-bold";
+      } else {
+        showToast("Attendee added.", "success");
+        setTimeout(() => window.location.reload(), 500);
+      }
+    });
+  }
+
+  if (formEditAttendee) {
+    formEditAttendee.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      const sid = document.getElementById("editStudentId").value.trim().toUpperCase();
+      const payload = {
+        student_id: sid,
+        last_name: document.getElementById("editLastName").value.trim(),
+        first_name: document.getElementById("editFirstName").value.trim(),
+        middle_name: document.getElementById("editMiddleName").value.trim() || "N/A",
+        sex: document.getElementById("editSex").value,
+        age: parseInt(document.getElementById("editAge").value, 10),
+        level: document.getElementById("editLevel").value,
+        section: document.getElementById("editSection").value.trim(),
+        email: document.getElementById("editEmail").value.trim().toLowerCase(),
+        morning_in: document.getElementById("editMorningIn").value.trim() || null,
+        morning_out: document.getElementById("editMorningOut").value.trim() || null,
+        afternoon_in: document.getElementById("editAfternoonIn").value.trim() || null,
+        afternoon_out: document.getElementById("editAfternoonOut").value.trim() || null,
+        eval_status: document.getElementById("editEvalStatus").value,
+        is_eligible: parseInt(document.getElementById("editEligible").value, 10)
+      };
+
+      const resp = await fetch("/api/admin/edit-attendee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (checkAuthRedirect(resp)) return;
+      const data = await resp.json();
+      if (!resp.ok || data.status === "error") {
+        editAttendeeAlert.textContent = data.message || "Failed to update attendee.";
+        editAttendeeAlert.className = "small mt-3 text-danger fw-bold";
+      } else {
+        showToast("Attendee updated.", "success");
+        setTimeout(() => window.location.reload(), 500);
+      }
+    });
+  }
+
+  function renderAttendeesRows(attendees) {
+    if (!attendees || attendees.length === 0) {
+      tableBody.innerHTML = `<tr id="emptyTableRow"><td colspan="10" class="text-center text-muted py-4">No attendees recorded yet.</td></tr>`;
+      return;
+    }
+    const html = attendees.map(a => {
+      let catBadge = `<span class="badge bg-secondary-lt">Guest</span>`;
+      if (a.level === "SHS") catBadge = `<span class="badge bg-yellow-lt">SHS</span>`;
+      else if (a.level === "COLLEGE") catBadge = `<span class="badge bg-blue-lt">College</span>`;
+
+      let evalBadge = `<span class="badge bg-secondary-lt">Pending</span>`;
+      if (a.eval_status === "SUBMITTED") {
+        const avgStr = a.eval_avg ? ` (${a.eval_avg})` : "";
+        evalBadge = `<span class="badge bg-green text-white">Submitted${escapeAttr(avgStr)}</span>`;
+      } else if (a.eval_status === "IN_PROGRESS") {
+        evalBadge = `<span class="badge bg-warning text-dark">In Progress</span>`;
+      }
+
+      let eligBadge = `<span class="badge bg-secondary-lt">Pending</span>`;
+      if (a.is_eligible) {
+        eligBadge = `<span class="badge bg-green text-white">Approved</span>`;
+      } else if (a.attendance_eligible && a.eval_status !== "SUBMITTED") {
+        eligBadge = `<span class="badge bg-warning-lt text-warning">Needs Eval</span>`;
+      } else if (a.eval_status === "SUBMITTED" && !a.attendance_eligible) {
+        eligBadge = `<span class="badge bg-azure-lt text-azure">Needs Time-Out</span>`;
+      }
+
+      return `<tr id="row-${escapeAttr(a.student_id)}">
+        <td class="font-monospace fw-bold">${escapeAttr(a.student_id)}</td>
+        <td class="fw-bold">${escapeAttr(a.full_name)}</td>
+        <td><span class="badge bg-secondary-lt">${escapeAttr(a.section)}</span></td>
+        <td>${catBadge}</td>
+        <td class="small">${escapeAttr(a.primary_in_fmt)}</td>
+        <td class="small">${escapeAttr(a.primary_out_fmt)}</td>
+        <td class="small">${escapeAttr(a.primary_duration_min)} min</td>
+        <td>${evalBadge}</td>
+        <td>${eligBadge}</td>
+        <td class="text-end">
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-primary btn-view-pass"
+                    data-id="${escapeAttr(a.student_id)}"
+                    data-name="${escapeAttr(a.full_name)}"
+                    data-section="${escapeAttr(a.section)}">Pass</button>
+            <button type="button" class="btn btn-outline-info btn-view-eval"
+                    data-id="${escapeAttr(a.student_id)}"
+                    data-name="${escapeAttr(a.full_name)}">Eval</button>
+            <button type="button" class="btn btn-outline-secondary btn-edit-attendee"
+                    data-id="${escapeAttr(a.student_id)}"
+                    data-last-name="${escapeAttr(a.last_name || '')}"
+                    data-first-name="${escapeAttr(a.first_name || '')}"
+                    data-middle-name="${escapeAttr(a.middle_name || '')}"
+                    data-sex="${escapeAttr(a.sex)}"
+                    data-age="${escapeAttr(a.age)}"
+                    data-email="${escapeAttr(a.email)}"
+                    data-level="${escapeAttr(a.level)}"
+                    data-section="${escapeAttr(a.section)}"
+                    data-morning-in="${escapeAttr(a.morning_in || '')}"
+                    data-morning-out="${escapeAttr(a.morning_out || '')}"
+                    data-afternoon-in="${escapeAttr(a.afternoon_in || '')}"
+                    data-afternoon-out="${escapeAttr(a.afternoon_out || '')}"
+                    data-eval-status="${escapeAttr(a.eval_status || 'PENDING')}"
+                    data-eligible="${a.is_eligible ? 1 : 0}">Edit</button>
+            <button type="button" class="btn btn-outline-danger btn-delete-attendee"
+                    data-id="${escapeAttr(a.student_id)}"
+                    data-name="${escapeAttr(a.full_name)}">Delete</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+    tableBody.innerHTML = html;
+    filterTable();
+  }
+
+  let lastAttendeesSig = "";
+
+  async function refreshKpiStats() {
+    try {
+      const resp = await fetch("/api/admin/live-feed");
+      if (!resp.ok) return;
+      const payload = await resp.json();
+      const data = payload.stats;
+      if (data) {
+        document.getElementById("kpiTotal").textContent = data.total;
+        document.getElementById("kpiMornIn").textContent = data.morning_in;
+        document.getElementById("kpiMornOut").textContent = data.morning_out;
+        document.getElementById("kpiAftIn").textContent = data.afternoon_in;
+        document.getElementById("kpiAftOut").textContent = data.afternoon_out;
+        document.getElementById("kpiEligible").textContent = data.eligible;
+        if (document.getElementById("kpiAttEligible")) document.getElementById("kpiAttEligible").textContent = data.attendance_eligible;
+        if (document.getElementById("kpiEvalSubmitted")) document.getElementById("kpiEvalSubmitted").textContent = data.eval_submitted;
+        if (document.getElementById("kpiEvalDrafts")) document.getElementById("kpiEvalDrafts").textContent = data.eval_in_progress;
+        if (document.getElementById("btnTallyDraftCount")) document.getElementById("btnTallyDraftCount").textContent = data.eval_in_progress;
+
+        if (data.evaluations) {
+          if (document.getElementById("txtEvalOverallAvg")) document.getElementById("txtEvalOverallAvg").textContent = data.evaluations.overall_avg;
+          if (document.getElementById("txtEvalSubCnt")) document.getElementById("txtEvalSubCnt").textContent = data.evaluations.submitted;
+          if (data.evaluations.criteria_avgs) {
+            for (let i = 1; i <= 10; i++) {
+              const el = document.getElementById("avgCrit" + i);
+              if (el) el.textContent = data.evaluations.criteria_avgs[i - 1];
+            }
+          }
+        }
+
+        document.getElementById("txtFemaleCount").textContent = data.sex.female;
+        document.getElementById("txtMaleCount").textContent = data.sex.male;
+        document.getElementById("txtOtherCount").textContent = data.sex.other;
+        if (document.getElementById("txtShsCount")) document.getElementById("txtShsCount").textContent = data.level.shs;
+        if (document.getElementById("txtCollegeCount")) document.getElementById("txtCollegeCount").textContent = data.level.college;
+        if (document.getElementById("txtGuestCount")) document.getElementById("txtGuestCount").textContent = data.level.non_student;
+      }
+      const anyModalOpen = document.querySelector(".modal.show");
+      if (!anyModalOpen && payload.attendees) {
+        const sig = JSON.stringify(payload.attendees.map(a => [
+          a.student_id, a.full_name, a.section, a.level,
+          a.primary_in_fmt, a.primary_out_fmt, a.primary_duration_min,
+          a.eval_status, a.eval_avg, a.is_eligible, a.attendance_eligible
+        ]));
+        if (sig !== lastAttendeesSig) {
+          lastAttendeesSig = sig;
+          renderAttendeesRows(payload.attendees);
+        }
+      }
+    } catch(e) {}
+  }
+
+  document.getElementById("btnConfirmDelete").addEventListener("click", async function() {
+    if (!pendingDeleteSid) return;
+    const resp = await fetch("/api/admin/delete-attendee", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ student_id: pendingDeleteSid })
+    });
+    if (checkAuthRedirect(resp)) return;
+    const data = await resp.json();
+    if (resp.ok && data.status === "success") {
+      showToast(`Deleted ${pendingDeleteSid}.`, "success");
+      const row = document.getElementById("row-" + pendingDeleteSid);
+      if (row) row.remove();
+      window.closeModalById("modalDeleteConfirm");
+      refreshKpiStats();
+    } else {
+      showToast(data.message || "Failed to delete attendee.", "danger");
+    }
+  });
+
+  // Live Feed Polling (Every 4 seconds)
+  setInterval(refreshKpiStats, 4000);
+});
+</script>
+{% endblock %}

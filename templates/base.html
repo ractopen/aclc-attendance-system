@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
+    <title>{% block title %}HIV Awareness Seminar | ACLC Evaluation & Attendance{% endblock %}</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico"/>
+    <link rel="icon" type="image/png" href="/static/img/aclc-logo.png"/>
+    <!-- Tabler CSS (100% Offline Local File) -->
+    <link href="/static/css/tabler.min.css" rel="stylesheet"/>
+    <style>
+      :root {
+        --aclc-blue: #0A3981;
+        --aclc-darkblue: #06204D;
+        --aclc-gold: #EAA315;
+        --aclc-gold-light: #FEF3C7;
+        --hiv-crimson: #B91C1C;
+        --hiv-crimson-dark: #7F1D1D;
+        --hiv-crimson-light: #FEE2E2;
+        --hiv-rose-bg: #FFF5F5;
+      }
+      .bg-aclc-blue { background-color: var(--aclc-blue) !important; color: #ffffff !important; }
+      .bg-aclc-dark { background-color: var(--aclc-darkblue) !important; color: #ffffff !important; }
+      .bg-hiv-crimson { background-color: var(--hiv-crimson) !important; color: #ffffff !important; }
+      .bg-hiv-header {
+        background: linear-gradient(135deg, #7F1D1D 0%, #991B1B 45%, #0A3981 100%) !important;
+        color: #ffffff !important;
+      }
+      .text-aclc-blue { color: var(--aclc-blue) !important; }
+      .text-aclc-gold { color: var(--aclc-gold) !important; }
+      .text-hiv-crimson { color: var(--hiv-crimson) !important; }
+      .border-aclc-blue { border-color: var(--aclc-blue) !important; }
+      .border-aclc-gold { border-color: var(--aclc-gold) !important; }
+      .border-hiv-crimson { border-color: var(--hiv-crimson) !important; }
+      .btn-aclc {
+        background-color: var(--aclc-blue) !important;
+        color: #ffffff !important;
+        border-color: var(--aclc-blue) !important;
+      }
+      .btn-aclc:hover {
+        background-color: var(--aclc-darkblue) !important;
+        color: #ffffff !important;
+      }
+      .btn-hiv {
+        background-color: var(--hiv-crimson) !important;
+        color: #ffffff !important;
+        border-color: var(--hiv-crimson) !important;
+        font-weight: 600 !important;
+      }
+      .btn-hiv:hover {
+        background-color: var(--hiv-crimson-dark) !important;
+        color: #ffffff !important;
+      }
+      .btn-gold {
+        background-color: var(--aclc-gold) !important;
+        color: #0F172A !important;
+        font-weight: 600 !important;
+        border-color: var(--aclc-gold) !important;
+      }
+      .btn-gold:hover {
+        background-color: #d18f0e !important;
+      }
+      .badge-gold {
+        background-color: var(--aclc-gold-light);
+        color: #92400E;
+        font-weight: 600;
+      }
+      .badge-hiv {
+        background-color: var(--hiv-crimson-light);
+        color: var(--hiv-crimson-dark);
+        font-weight: 700;
+      }
+      /* Remove browser default up/down spinner arrows on number inputs */
+      input[type="number"]::-webkit-outer-spin-button,
+      input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none !important;
+        margin: 0 !important;
+      }
+      input[type="number"] {
+        -moz-appearance: textfield !important;
+        appearance: textfield !important;
+      }
+    </style>
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="{% block body_class %}bg-slate-50{% endblock %}">
+    <div class="page">
+      {% block content %}{% endblock %}
+    </div>
+
+    <!-- Tabler Core JS (100% Offline Local File) -->
+    <script src="/static/js/tabler.min.js"></script>
+    <script>
+      window.bootstrap = window.bootstrap || (window.tabler && window.tabler.bootstrap);
+      window.openModalById = function(modalId) {
+        var el = document.getElementById(modalId);
+        if (!el) return;
+        if (window.bootstrap && window.bootstrap.Modal) {
+          window.bootstrap.Modal.getOrCreateInstance(el).show();
+        } else {
+          el.classList.add("show");
+          el.style.display = "block";
+          document.body.classList.add("modal-open");
+        }
+      };
+      window.closeModalById = function(modalId) {
+        var el = document.getElementById(modalId);
+        if (!el) return;
+        if (window.bootstrap && window.bootstrap.Modal) {
+          var inst = window.bootstrap.Modal.getInstance(el) || window.bootstrap.Modal.getOrCreateInstance(el);
+          inst.hide();
+        } else {
+          el.classList.remove("show");
+          el.style.display = "none";
+          document.body.classList.remove("modal-open");
+        }
+      };
+    </script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}ACLC Admin Login | Security Gate{% endblock %}
+
+{% block content %}
+<div class="page page-center">
+  <div class="container container-tight py-4">
+    <div class="text-center mb-4">
+      <img src="/static/img/aclc-logo.png" alt="ACLC College of Mandaue" width="84" height="84" class="rounded-circle shadow mb-2">
+      <h2 class="text-aclc-blue fw-bold mb-0">Admin Access Control</h2>
+      <p class="text-muted small">ACLC College of Mandaue &middot; Attendance Portal</p>
+    </div>
+
+    <div class="card card-md shadow-sm border-0">
+      <div class="card-body p-4">
+        <h3 class="card-title text-center text-dark mb-4">Authentication Required</h3>
+
+        {% if is_locked %}
+        <div class="alert alert-danger text-center py-3" role="alert">
+          <div class="fw-bold mb-1">Access Temporarily Locked</div>
+          <div class="small text-muted mb-2">Too many unsuccessful attempts (4 failed).</div>
+          <div class="fs-2 font-monospace fw-bold text-danger" id="lockoutTimer">
+            {{ lockout_remaining }}s
+          </div>
+          <small class="d-block text-secondary mt-1">Please wait until the countdown ends.</small>
+        </div>
+        {% else %}
+        
+        {% if error_msg %}
+        <div class="alert alert-danger py-2 px-3 small mb-3">
+          {{ error_msg }}
+        </div>
+        {% endif %}
+
+        <form action="/admin/login" method="post" autocomplete="off">
+          <input type="hidden" name="next_url" value="{{ next_url or '/admin' }}">
+          <div class="mb-3">
+            <label class="form-label required">Admin Master Password</label>
+            <input type="password" class="form-control form-control-lg" name="password" placeholder="Enter password" required autofocus>
+            <small class="form-hint">Authorized event coordinators only.</small>
+          </div>
+
+          <div class="form-footer mt-4">
+            <button type="submit" class="btn btn-aclc btn-lg w-100 fw-bold">
+              Unlock Dashboard
+            </button>
+          </div>
+        </form>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <div class="text-center text-muted small mt-4 fw-bold">
+      Prepared by: CS31A
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if is_locked %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  let remaining = {{ lockout_remaining }};
+  const timerEl = document.getElementById("lockoutTimer");
+  
+  const interval = setInterval(function() {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(interval);
+      window.location.reload();
+    } else {
+      const mins = Math.floor(remaining / 60);
+      const secs = remaining % 60;
+      timerEl.textContent = mins + ":" + (secs < 10 ? "0" : "") + secs;
+    }
+  }, 1000);
+});
+</script>
+{% endif %}
+{% endblock %}

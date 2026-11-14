@@ -1,0 +1,1697 @@
+{% extends "base.html" %}
+
+{% block title %}SEMINAR EVALUATION FORM | HIV Awareness - ACLC College{% endblock %}
+
+{% block extra_head %}
+<!-- Offline QR Library -->
+<script src="/static/js/qrcode.min.js"></script>
+<style>
+  .pass-qr-card {
+    background: #FFFFFF;
+    border: 2px solid #CBD5E1;
+    border-radius: 12px;
+    padding: 20px 16px;
+    height: 100%;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .pass-qr-card.pass-approved {
+    border-color: #16A34A;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F0FDF4 100%);
+  }
+  .pass-qr-frame {
+    display: inline-block;
+    padding: 10px;
+    background: #FFFFFF;
+    border: 2px solid var(--aclc-blue);
+    border-radius: 8px;
+    margin: 0 auto;
+    max-width: 100%;
+  }
+  .pass-qr-frame img,
+  .pass-qr-frame canvas {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block;
+    margin: 0 auto;
+  }
+  .passes-header-toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+  .student-main-container {
+    max-width: 640px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .session-status-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #F1F5F9;
+  }
+  .mobile-drag-handle {
+    width: 40px;
+    height: 4px;
+    background-color: #CBD5E1;
+    border-radius: 9999px;
+    margin: 0 auto 8px auto;
+  }
+  @media (min-width: 768px) {
+    .mobile-drag-handle {
+      display: none !important;
+    }
+    .passes-header-toggle {
+      cursor: default;
+    }
+  }
+  /* Seminar Evaluation Form Styling */
+  .eval-criteria-row {
+    border-bottom: 1px solid #E2E8F0;
+    padding: 12px 8px;
+    transition: background-color 0.15s ease;
+  }
+  .eval-criteria-row:hover {
+    background-color: #F8FAFC;
+  }
+  .eval-rating-group {
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+  }
+  .eval-rating-option {
+    flex: 1;
+    text-align: center;
+  }
+  .eval-rating-option input[type="radio"] {
+    display: none;
+  }
+  .eval-rating-option label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    border: 2px solid #CBD5E1;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #334155;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+  .eval-rating-option label .chk-box {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #64748B;
+    border-radius: 4px;
+    margin-bottom: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #FFFFFF;
+  }
+  .eval-rating-option input[type="radio"]:checked + label {
+    border-color: var(--hiv-crimson);
+    background-color: var(--hiv-crimson-light);
+    color: var(--hiv-crimson-dark);
+    box-shadow: 0 2px 5px rgba(185, 28, 28, 0.18);
+  }
+  .eval-rating-option input[type="radio"]:checked + label .chk-box {
+    border-color: var(--hiv-crimson);
+    background-color: var(--hiv-crimson);
+  }
+  .eval-rating-option input[type="radio"]:checked + label .chk-box::after {
+    content: "";
+    width: 6px;
+    height: 10px;
+    border: solid #FFFFFF;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
+    margin-bottom: 2px;
+  }
+  .eval-section-banner {
+    background: #F8FAFC;
+    border-left: 4px solid var(--hiv-crimson);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 14px;
+  }
+  .eval-auto-expand {
+    overflow-y: hidden;
+    resize: none;
+    min-height: 68px;
+    line-height: 1.5;
+    transition: border-color 0.15s ease;
+  }
+  .ribbon-svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+    vertical-align: text-bottom;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top Header (HIV Awareness Seminar & Evaluation Theme) -->
+<header class="navbar bg-hiv-header d-print-none shadow-sm border-bottom border-aclc-gold">
+  <div class="container-xl py-2 d-flex align-items-center justify-content-between flex-nowrap gap-2">
+    <div class="d-flex align-items-center min-w-0">
+      <img src="/static/img/aclc-logo.png" alt="ACLC College of Mandaue" width="40" height="40" class="rounded-circle me-2 me-md-3 flex-shrink-0 border border-2 border-warning">
+      <div class="min-w-0">
+        <div class="d-none d-sm-flex align-items-center gap-2 mb-1">
+          <span class="badge bg-warning text-dark fw-bold text-uppercase" style="font-size: 0.7rem;">SEMINAR EVALUATION FORM</span>
+          <span class="badge bg-hiv-crimson text-white fw-bold text-uppercase" style="font-size: 0.7rem;">Topic: HIV Awareness</span>
+        </div>
+        <h3 class="mb-0 text-white fw-bold text-truncate" id="kioskEventTitle">{{ event_title }}</h3>
+      </div>
+    </div>
+    <div class="ms-auto flex-shrink-0">
+      <button type="button" id="btnTogglePasses" class="btn btn-warning btn-sm fw-bold text-dark">
+        My Passes (<span id="navPassCount">0</span>)
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="page-body my-4">
+  <div class="container-xl student-main-container">
+
+    <!-- Active Session & Criteria Banner -->
+    <div class="card mb-3 border-0 shadow-sm">
+      <div class="card-status-top bg-hiv-crimson"></div>
+      <div class="card-body py-3 px-3">
+        <div>
+          <span class="text-hiv-crimson small text-uppercase fw-bold">HIV Awareness Seminar &middot; Attendance &amp; Evaluation</span>
+          <div class="fw-bold text-dark fs-3" id="activeSessionText">{{ session }} Session</div>
+          <div class="text-muted small">
+            Certificate requires <strong class="text-aclc-blue min-dur-text">{{ min_duration_label }}</strong> attendance + <strong class="text-hiv-crimson">Seminar Evaluation Form</strong>
+          </div>
+        </div>
+        <div class="session-status-row">
+          <span class="badge {% if status == 'Time Out' %}bg-orange text-white{% elif status == 'Closed' %}bg-secondary text-white{% else %}bg-green text-white{% endif %} px-3 py-2 fs-5 fw-bold" id="activeStatusBadge">
+            {{ status }}
+          </span>
+          <span class="badge {% if eval_open %}bg-hiv-crimson text-white{% else %}bg-secondary-lt text-muted{% endif %} px-3 py-2 fs-5 fw-bold" id="activeEvalStateBadge">
+            {% if eval_open %}Evaluation Open{% else %}Evaluation Closed{% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Announcement Banner -->
+    <div id="announcementContainer" class="alert alert-info py-2 px-3 mb-3 small d-flex align-items-center shadow-sm {% if not kiosk_announcement %}d-none{% endif %}">
+      <div><strong>Notice:</strong> <span id="announcementText">{{ kiosk_announcement }}</span></div>
+    </div>
+
+    <!-- State: Time Out View (Direct to My Passes) -->
+    <div id="timeOutActiveNotice" class="card p-4 text-center shadow-sm mb-4 {% if status != 'Time Out' %}d-none{% endif %}">
+      <h3 class="text-aclc-blue mb-1">Time Out is Open</h3>
+      <p class="text-muted mb-0">Present your QR pass below at the exit scanner and ensure your Seminar Evaluation Form is submitted.</p>
+    </div>
+
+    <!-- State: Closed View -->
+    <div id="closedNotice" class="card p-4 text-center shadow-sm mb-4 {% if status != 'Closed' %}d-none{% endif %}">
+      <h3 class="text-dark mb-1">Attendance is Closed</h3>
+      <p class="text-muted mb-0">Attendance recording is currently paused or closed. You can still view your saved passes and take the evaluation below when opened.</p>
+    </div>
+
+    <!-- Pass Generated Notification (Shown right after Time In) -->
+    <div id="timeInSuccessAlert" class="alert alert-success d-none py-3 px-4 mb-4 text-center shadow-sm">
+      <h3 class="text-success fw-bold mb-1">Time In Recorded</h3>
+      <p class="mb-2 text-dark small" id="timeInSuccessMsg">Your attendance has been recorded. Keep your pass below for your Seminar Evaluation and Time Out.</p>
+      <button type="button" id="btnRegisterAnother" class="btn btn-outline-success btn-sm fw-bold">
+        Register Another Person / Classmate (Time In)
+      </button>
+    </div>
+
+    <!-- My Passes Section (Always Visible & Collapsible Multi-Pass List) -->
+    <div id="myPassesSection" class="card shadow-sm border-0 mb-4">
+      <div id="myPassesHeaderToggle" class="card-header bg-white d-flex justify-content-between align-items-center py-3 px-4 passes-header-toggle">
+        <div>
+          <h3 class="text-aclc-blue fw-bold mb-0">My Passes &amp; Seminar Evaluation</h3>
+          <small class="text-muted">Each pass has its own evaluation form &middot; Classmates can share one phone</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-primary text-white fs-4 px-3 py-1" id="passesCountBadge">0 Passes</span>
+          <button type="button" id="btnCollapsePasses" class="btn btn-outline-secondary btn-sm fw-bold">
+            Hide
+          </button>
+        </div>
+      </div>
+
+      <div id="myPassesCollapseBody" class="card-body p-3 p-md-4 border-top">
+        <!-- Add Friend's Pass Card -->
+        <div class="card bg-light border p-3 mb-4">
+          <label class="form-label fw-bold text-aclc-blue mb-1">Add a Classmate's Pass (Shared Phone Support)</label>
+          <small class="text-muted d-block mb-2">If a classmate registered on another device or has no battery, enter their Student ID so they can show their QR pass or take their Seminar Evaluation on this phone:</small>
+          <div class="input-group">
+            <input type="text" id="inputFriendId" class="form-control text-uppercase font-monospace" placeholder="e.g. 2024-01234" maxlength="50" autocomplete="off">
+            <button type="button" id="btnAddFriendPass" class="btn btn-aclc fw-bold px-3">Add Pass</button>
+          </div>
+          <div id="friendPassAlert" class="small mt-2 d-none fw-bold"></div>
+        </div>
+
+        <!-- Passes Container: 1 column for 1-2 passes, 2xN (2 columns) for 3+ passes -->
+        <div id="passesListContainer" class="row g-3">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Registration Form (State: Time In) -->
+    <div id="formCard" class="card shadow-sm border-0 {% if status != 'Time In' %}d-none{% endif %}">
+      <div class="card-status-top bg-aclc-blue"></div>
+      <div class="card-body p-4 p-md-5">
+        <div class="text-center mb-4">
+          <span class="badge badge-hiv px-3 py-1 mb-2">HIV AWARENESS SEMINAR</span>
+          <h2 class="card-title text-center text-aclc-blue fs-1 mb-1">Attendance Time In</h2>
+          <p class="text-center text-muted small mb-0">Register to generate your Attendance Pass &amp; Evaluation Access</p>
+        </div>
+
+        <form id="attendanceForm" autocomplete="off">
+
+          <!-- Category -->
+          <div class="mb-3">
+            <label class="form-label required">Academic Category</label>
+            <div class="row g-2">
+              <div class="col-md-4 col-12">
+                <input type="radio" class="btn-check" name="level" id="levelSHS" value="SHS" checked>
+                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelSHS">Senior High (SHS)</label>
+              </div>
+              <div class="col-md-4 col-12">
+                <input type="radio" class="btn-check" name="level" id="levelCollege" value="COLLEGE">
+                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelCollege">College Level</label>
+              </div>
+              <div class="col-md-4 col-12">
+                <input type="radio" class="btn-check" name="level" id="levelGuest" value="NON_STUDENT">
+                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelGuest">Guest / Other</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Student ID -->
+          <div class="mb-3">
+            <label class="form-label required" id="lblId">Student ID Number</label>
+            <input type="text" class="form-control form-control-lg text-uppercase font-monospace" id="student_id" name="student_id" placeholder="e.g. 2024-01234" maxlength="50" required autofocus>
+          </div>
+
+          <!-- Names -->
+          <div class="row g-3 mb-2">
+            <div class="col-md-6 col-12">
+              <label class="form-label required">Last Name</label>
+              <input type="text" class="form-control" id="last_name" name="last_name" placeholder="e.g. Dela Cruz" maxlength="100" required>
+            </div>
+            <div class="col-md-6 col-12">
+              <label class="form-label required">First Name</label>
+              <input type="text" class="form-control" id="first_name" name="first_name" placeholder="e.g. Juan" maxlength="100" required>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Middle Name <span class="text-muted fw-normal">(Optional)</span></label>
+            <input type="text" class="form-control" id="middle_name" name="middle_name" placeholder="Leave blank if none" maxlength="100">
+          </div>
+
+          <!-- Sex & Age (Clamped 10 to 120) -->
+          <div class="row g-3 mb-2">
+            <div class="col-md-7 col-12">
+              <label class="form-label required">Sex</label>
+              <select class="form-select" id="sex_select" name="sex_select" required>
+                <option value="">Select Sex</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </div>
+            <div class="col-md-5 col-12">
+              <label class="form-label required">Age</label>
+              <div class="input-group">
+                <button type="button" class="btn btn-outline-secondary px-3 fw-bold fs-3" id="btnAgeMinus">-</button>
+                <input type="text" inputmode="numeric" pattern="[0-9]*" class="form-control text-center fw-bold px-1" id="age" name="age" placeholder="Age" maxlength="3" autocomplete="off" required
+                  oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length>3) this.value=this.value.slice(0,3); if(parseInt(this.value)>120) this.value='120';"
+                  onblur="if(this.value!=='' && parseInt(this.value)<10) this.value='10';">
+                <button type="button" class="btn btn-outline-secondary px-3 fw-bold fs-3" id="btnAgePlus">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section -->
+          <div class="mb-3">
+            <label class="form-label required" id="lblSection">Section</label>
+            <input type="text" class="form-control text-uppercase" id="section" name="section" placeholder="e.g. 11-ICT-A, BSCS-3A" maxlength="50" required>
+          </div>
+
+          <!-- Email -->
+          <div class="mb-3">
+            <label class="form-label required">Email Address</label>
+            <input type="email" class="form-control" id="email" name="email" placeholder="e.g. name@gmail.com" maxlength="120" required>
+            <small class="text-muted">Certificate will be sent to this email once attendance duration (<span class="min-dur-text">{{ min_duration_label }}</span>) and evaluation are complete.</small>
+          </div>
+
+          <!-- Data Privacy & Terms Notice -->
+          <div class="mb-3 small text-muted text-center">
+            By timing in, you agree to the <a href="#" id="linkPrivacyNotice" class="text-aclc-blue fw-bold text-decoration-underline">Data Privacy &amp; Seminar Terms Notice (RA 10173)</a>.
+          </div>
+
+          <!-- Error Alert -->
+          <div id="formErrorAlert" class="alert alert-danger d-none py-2 px-3 small" role="alert"></div>
+
+          <!-- Submit -->
+          <div class="form-footer mt-3">
+            <button type="submit" id="submitBtn" class="btn btn-aclc btn-lg w-100 py-3 fs-3 fw-bold">
+              Time In
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- Attribution Footer -->
+    <div class="text-center text-muted small mt-4 fw-bold">
+      Prepared by: CS31A
+    </div>
+
+  </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- MODAL 1: SEMINAR EVALUATION FORM (PER PASS ACCOUNT, AUTO-SAVED)         -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalSeminarEvaluation" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow-lg">
+      <!-- Modal Header -->
+      <div class="modal-header bg-hiv-header text-white py-3 px-4">
+        <div>
+          <div class="badge bg-warning text-dark fw-bold mb-1">SEMINAR TOPIC: HIV AWARENESS</div>
+          <h4 class="modal-title text-white fw-bold mb-0">SEMINAR EVALUATION FORM</h4>
+        </div>
+      </div>
+
+      <!-- Subheader: Active Account & Auto-Save Status -->
+      <div class="bg-light border-bottom px-4 py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="small">
+          <span class="text-muted">Participant:</span>
+          <strong class="text-aclc-blue" id="evalActiveStudentName">-</strong>
+          <span class="font-monospace text-dark fw-bold ms-1" id="evalActiveStudentId">(-)</span>
+        </div>
+        <div class="small fw-bold text-success" id="evalAutosaveIndicator">
+          Auto-save active
+        </div>
+      </div>
+
+      <!-- Modal Body: Full Evaluation Form -->
+      <div class="modal-body p-3 p-md-4">
+        <form id="seminarEvaluationForm" autocomplete="off">
+          <!-- Instructions -->
+          <div class="alert alert-secondary bg-white border border-secondary-subtle py-2 px-3 mb-4 small text-dark">
+            <strong>Instructions:</strong> Please read each statement carefully and select the response that best reflects your experience and level of agreement. Your answers are automatically saved as you type.
+          </div>
+
+          <!-- PART I: EVALUATION OF THE SEMINAR -->
+          <div class="eval-section-banner">
+            <h4 class="fw-bold text-hiv-crimson mb-1">I. Evaluation of the Seminar</h4>
+            <div class="small text-dark">
+              <strong>Rating Scale:</strong>
+              <span class="badge bg-white text-dark border ms-1">5 &ndash; Strongly Agree</span>
+              <span class="badge bg-white text-dark border ms-1">4 &ndash; Agree</span>
+              <span class="badge bg-white text-dark border ms-1">3 &ndash; Neutral</span>
+              <span class="badge bg-white text-dark border ms-1">2 &ndash; Disagree</span>
+              <span class="badge bg-white text-dark border ms-1">1 &ndash; Strongly Disagree</span>
+            </div>
+          </div>
+
+          <div class="card border mb-4">
+            <div class="card-header bg-light py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-bold text-dark small text-uppercase">Evaluation Criteria</span>
+              <span class="text-muted small fw-bold">Select Rating (5 to 1)</span>
+            </div>
+            <div class="card-body p-2 p-md-3" id="evalPart1Container">
+              <!-- Populated dynamically with the 10 HIV Awareness statements -->
+            </div>
+          </div>
+
+          <!-- PART II: LEARNING OUTCOMES -->
+          <div class="eval-section-banner">
+            <h4 class="fw-bold text-hiv-crimson mb-0">II. Learning Outcomes</h4>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold text-dark required" for="eval_q2_1">
+              1. What important information did you learn from the HIV Awareness Seminar?
+            </label>
+            <textarea class="form-control eval-input eval-auto-expand" id="eval_q2_1" name="q2_1" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold text-dark required" for="eval_q2_2">
+              2. What misconception about HIV was clarified during the seminar?
+            </label>
+            <textarea class="form-control eval-input eval-auto-expand" id="eval_q2_2" name="q2_2" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-bold text-dark required" for="eval_q2_3">
+              3. How will you apply the knowledge you gained from the seminar in your daily life?
+            </label>
+            <textarea class="form-control eval-input eval-auto-expand" id="eval_q2_3" name="q2_3" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
+          </div>
+
+          <!-- PART III: OVERALL ASSESSMENT -->
+          <div class="eval-section-banner">
+            <h4 class="fw-bold text-hiv-crimson mb-0">III. Overall Assessment</h4>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold text-dark required" for="eval_q3_1">
+              1. What part of the seminar did you find most helpful?
+            </label>
+            <textarea class="form-control eval-input eval-auto-expand" id="eval_q3_1" name="q3_1" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold text-dark required" for="eval_q3_2">
+              2. What topics related to HIV awareness would you like to learn more about?
+            </label>
+            <textarea class="form-control eval-input eval-auto-expand" id="eval_q3_2" name="q3_2" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold text-dark required" for="eval_q3_3">
+              3. What suggestions do you have to improve future seminars?
+            </label>
+            <textarea class="form-control eval-input eval-auto-expand" id="eval_q3_3" name="q3_3" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
+          </div>
+
+          <div class="text-center text-muted small fw-bold my-3">
+            Thank you for your participation and honest feedback!
+          </div>
+
+          <div id="evalFormErrorAlert" class="alert alert-danger d-none py-2 px-3 small fw-bold" role="alert"></div>
+        </form>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer bg-light d-flex flex-row justify-content-between align-items-center gap-2 flex-nowrap">
+        <button type="button" class="btn btn-outline-secondary fw-bold" id="btnFooterCloseEval">
+          Close &amp; Resume Later
+        </button>
+        <button type="button" class="btn btn-hiv fw-bold px-4" id="btnSubmitEvaluation">
+          Submit Evaluation
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- MODAL 2: EVALUATION CURRENTLY UNDERGOING (CONCURRENCY LOCK CONFLICT)    -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalEvaluationLocked" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title fw-bold">Evaluation Currently Undergoing</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 text-center">
+        <div class="badge bg-danger-lt text-danger px-3 py-2 fs-4 fw-bold mb-3">
+          Active Session Priority Lock
+        </div>
+        <h3 class="text-dark fw-bold mb-1" id="lockedModalStudentName"></h3>
+        <div class="font-monospace text-muted fw-bold mb-3" id="lockedModalStudentId"></div>
+        <p class="text-dark mb-3" id="lockedModalMessage">
+          An evaluation is currently undergoing with this user on another device or browser window.
+          Only the first active session taking the evaluation has priority.
+        </p>
+        <div class="p-3 bg-light rounded border small text-muted">
+          If the other device disconnected or closed its browser without saving, this lock will automatically release in
+          <strong class="text-danger" id="lockedModalCountdown">35</strong> seconds.
+        </div>
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-aclc fw-bold" id="btnRetryLockedEval">Continue on This Device</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- MODAL 3: DATA PRIVACY & SEMINAR TERMS NOTICE (RA 10173)                 -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalPrivacyTerms" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-aclc-blue text-white">
+        <h5 class="modal-title fw-bold">Data Privacy &amp; Seminar Terms Notice</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 small text-dark">
+        <div class="fw-bold text-aclc-blue mb-2">Republic Act No. 10173 (Data Privacy Act of 2012)</div>
+        <p class="mb-3">
+          Your personal information (Student ID, Full Name, Sex, Age, Academic Level, Section, Email, and local network device telemetry) is collected exclusively on this offline local server for official attendance verification, Gender and Development (GAD) demographic reporting, seminar evaluation, and Certificate of Participation issuance at ACLC College of Mandaue.
+        </p>
+        <div class="fw-bold text-hiv-crimson mb-1">Seminar Attendance &amp; Certificate Guidelines</div>
+        <div class="p-3 bg-light rounded border" style="white-space: pre-line;" id="privacyTermsBodyText">{{ terms_and_conditions or '1. Attendees must record Time-In upon arrival and Time-Out at the exit scanner.\n2. Certificate eligibility requires meeting the minimum attendance duration (' ~ min_duration_label ~ ') AND submitting the Seminar Evaluation Form.' }}</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-aclc fw-bold w-100" data-bs-dismiss="modal">Understood</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const STORAGE_KEY = "aclc_saved_passes_v1";
+  const SESSION_ID_KEY = "aclc_eval_client_session_v1";
+  const DRAFT_PREFIX = "aclc_eval_draft_";
+
+  // Generate or retrieve unique per-tab session ID for concurrency lock priority
+  function getClientSessionId() {
+    let sid = sessionStorage.getItem(SESSION_ID_KEY);
+    if (!sid) {
+      sid = "SESS-" + Math.random().toString(36).substring(2, 10).toUpperCase() + "-" + Date.now().toString(36).toUpperCase();
+      sessionStorage.setItem(SESSION_ID_KEY, sid);
+    }
+    return sid;
+  }
+  const clientSessionId = getClientSessionId();
+
+  const PART1_STATEMENTS = [
+    "1. The objectives of the HIV Awareness Seminar were clearly presented.",
+    "2. The speaker demonstrated sufficient knowledge of HIV and related topics.",
+    "3. The information presented was accurate, relevant, and easy to understand.",
+    "4. The seminar provided a clear understanding of HIV, its transmission, and prevention.",
+    "5. The discussion addressed common misconceptions and stigma surrounding HIV.",
+    "6. The speaker encouraged active participation and interaction.",
+    "7. The seminar increased my awareness of HIV prevention and testing.",
+    "8. The seminar helped me understand the importance of respect and non-discrimination toward people living with HIV.",
+    "9. The materials and presentations supported my understanding of the topic.",
+    "10. Overall, the seminar was informative and beneficial."
+  ];
+
+  // Build Part I rating rows inside the evaluation modal
+  const evalPart1Container = document.getElementById("evalPart1Container");
+  if (evalPart1Container) {
+    evalPart1Container.innerHTML = PART1_STATEMENTS.map((stmt, idx) => {
+      const qNum = idx + 1;
+      const fieldName = `q1_${qNum}`;
+      const optionsHtml = [5, 4, 3, 2, 1].map(score => `
+        <div class="eval-rating-option">
+          <input type="radio" class="eval-input" name="${fieldName}" id="opt_${fieldName}_${score}" value="${score}">
+          <label for="opt_${fieldName}_${score}">
+            <span class="chk-box"></span>
+            <span>${score}</span>
+          </label>
+        </div>
+      `).join("");
+      return `
+        <div class="eval-criteria-row">
+          <div class="fw-bold text-dark mb-2">${stmt}</div>
+          <div class="eval-rating-group">
+            ${optionsHtml}
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  let isEvalOpen = {{ 'true' if eval_open else 'false' }};
+  let currentMinDurLabel = "{{ min_duration_label }}";
+  let livePassStatuses = {};
+
+  const formCard = document.getElementById("formCard");
+  const attendanceForm = document.getElementById("attendanceForm");
+  const submitBtn = document.getElementById("submitBtn");
+  const formErrorAlert = document.getElementById("formErrorAlert");
+  const timeInSuccessAlert = document.getElementById("timeInSuccessAlert");
+  const timeInSuccessMsg = document.getElementById("timeInSuccessMsg");
+
+  const myPassesSection = document.getElementById("myPassesSection");
+  const myPassesHeaderToggle = document.getElementById("myPassesHeaderToggle");
+  const myPassesCollapseBody = document.getElementById("myPassesCollapseBody");
+  const btnCollapsePasses = document.getElementById("btnCollapsePasses");
+  const passesListContainer = document.getElementById("passesListContainer");
+  const passesCountBadge = document.getElementById("passesCountBadge");
+  const btnTogglePasses = document.getElementById("btnTogglePasses");
+  const navPassCount = document.getElementById("navPassCount");
+
+  function setPassesExpanded(expanded) {
+    if (!myPassesCollapseBody || !btnCollapsePasses) return;
+    if (expanded) {
+      myPassesCollapseBody.classList.remove("d-none");
+      btnCollapsePasses.textContent = "Hide";
+    } else {
+      myPassesCollapseBody.classList.add("d-none");
+      btnCollapsePasses.textContent = "Show";
+    }
+  }
+
+  function togglePassesCollapsed() {
+    if (!myPassesCollapseBody) return;
+    const isHidden = myPassesCollapseBody.classList.contains("d-none");
+    setPassesExpanded(isHidden);
+  }
+
+  if (myPassesHeaderToggle) {
+    myPassesHeaderToggle.addEventListener("click", function() {
+      togglePassesCollapsed();
+    });
+  }
+
+  const ageInput = document.getElementById("age");
+  const btnAgeMinus = document.getElementById("btnAgeMinus");
+  const btnAgePlus = document.getElementById("btnAgePlus");
+
+  // Age Stepper Buttons
+  btnAgeMinus.addEventListener("click", function() {
+    let val = ageInput.value.trim() === "" ? 17 : parseInt(ageInput.value, 10);
+    if (isNaN(val)) val = 17;
+    ageInput.value = val > 10 ? val - 1 : 10;
+  });
+
+  btnAgePlus.addEventListener("click", function() {
+    let val = ageInput.value.trim() === "" ? 17 : parseInt(ageInput.value, 10);
+    if (isNaN(val)) val = 17;
+    ageInput.value = val < 120 ? val + 1 : 120;
+  });
+
+  // Data Privacy Modal Trigger
+  const linkPrivacyNotice = document.getElementById("linkPrivacyNotice");
+  if (linkPrivacyNotice) {
+    linkPrivacyNotice.addEventListener("click", function(e) {
+      e.preventDefault();
+      window.openModalById("modalPrivacyTerms");
+    });
+  }
+
+  // Category Toggle & Smart Section Keyword Auto-Detection
+  const radioSHS = document.getElementById("levelSHS");
+  const radioCollege = document.getElementById("levelCollege");
+  const radioGuest = document.getElementById("levelGuest");
+  const lblId = document.getElementById("lblId");
+  const lblSection = document.getElementById("lblSection");
+  const sectionInput = document.getElementById("section");
+  const studentIdInputEl = document.getElementById("student_id");
+
+  function updateCategoryLabels() {
+    if (!lblId || !lblSection || !sectionInput) return;
+    if (radioGuest && radioGuest.checked) {
+      lblId.textContent = "ID / Control Number";
+      if (studentIdInputEl) studentIdInputEl.placeholder = "e.g. FACULTY-01 or GUEST-01";
+      lblSection.textContent = "Role / Designation";
+      sectionInput.placeholder = "e.g. Faculty, Guest Speaker, Staff";
+    } else if (radioCollege && radioCollege.checked) {
+      lblId.textContent = "Student ID Number";
+      if (studentIdInputEl) studentIdInputEl.placeholder = "e.g. 2024-01234";
+      lblSection.textContent = "Section";
+      sectionInput.placeholder = "e.g. BSCS-3A, BSIT-2B, CS31A";
+    } else {
+      lblId.textContent = "Student ID Number";
+      if (studentIdInputEl) studentIdInputEl.placeholder = "e.g. 2024-01234";
+      lblSection.textContent = "Section";
+      sectionInput.placeholder = "e.g. 11-ICT-A, 12-STEM-B";
+    }
+  }
+
+  [radioSHS, radioCollege, radioGuest].forEach(r => {
+    if (r) r.addEventListener("change", updateCategoryLabels);
+  });
+
+  if (sectionInput) {
+    sectionInput.addEventListener("input", function() {
+      if (radioGuest && radioGuest.checked) return;
+      const val = this.value.toUpperCase();
+      if (/(?:^|\b)(?:BSCS|BSIT|BSBA|BSHM|ACT|CS\d|IT\d|BA\d|HM\d)/.test(val) || /\b(?:BSCS|BSIT|BSBA|BSHM|ACT)\b/.test(val)) {
+        if (radioCollege && !radioCollege.checked) {
+          radioCollege.checked = true;
+          updateCategoryLabels();
+        }
+      } else if (/(?:^|\b)(?:STEM|ABM|HUMSS|GAS|TVL|ICT|HE|11|12|G11|G12)\b/.test(val) || /^(?:11|12)[-_]/.test(val)) {
+        if (radioSHS && !radioSHS.checked) {
+          radioSHS.checked = true;
+          updateCategoryLabels();
+        }
+      }
+    });
+  }
+
+  // Local Storage Pass & Draft Functions
+  function getSavedPasses() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    } catch(e) {
+      return [];
+    }
+  }
+
+  function savePass(passObj) {
+    let list = getSavedPasses();
+    list = list.filter(p => p.student_id !== passObj.student_id);
+    list.unshift(passObj);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    setPassesExpanded(true);
+    renderPassesUI();
+    syncPassesLiveStatus();
+  }
+
+  function updateStoredPassMeta(studentId, updates) {
+    let list = getSavedPasses();
+    let changed = false;
+    list = list.map(p => {
+      if (p.student_id === studentId) {
+        changed = true;
+        return Object.assign({}, p, updates);
+      }
+      return p;
+    });
+    if (changed) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    }
+  }
+
+  function removePass(studentId) {
+    let list = getSavedPasses();
+    list = list.filter(p => p.student_id !== studentId);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    renderPassesUI();
+  }
+
+  function getLocalDraft(studentId) {
+    try {
+      return JSON.parse(localStorage.getItem(DRAFT_PREFIX + studentId.toUpperCase()) || "{}");
+    } catch(e) {
+      return {};
+    }
+  }
+
+  function setLocalDraft(studentId, draftObj) {
+    try {
+      localStorage.setItem(DRAFT_PREFIX + studentId.toUpperCase(), JSON.stringify(draftObj));
+    } catch(e) {}
+  }
+
+  function hasAnyDraftAnswers(draftObj) {
+    if (!draftObj) return false;
+    for (let i = 1; i <= 10; i++) {
+      if (draftObj[`q1_${i}`]) return true;
+    }
+    for (let part of [2, 3]) {
+      for (let j = 1; j <= 3; j++) {
+        if (draftObj[`q${part}_${j}`] && String(draftObj[`q${part}_${j}`]).trim() !== "") return true;
+      }
+    }
+    return false;
+  }
+
+  function renderPassesUI() {
+    const list = getSavedPasses();
+    const count = list.length;
+    const isTwoColumn = count >= 3;
+
+    if (navPassCount) navPassCount.textContent = count;
+    if (passesCountBadge) passesCountBadge.textContent = count + (count === 1 ? " Pass" : " Passes");
+
+    if (!passesListContainer) return;
+    passesListContainer.innerHTML = "";
+
+    if (count === 0) {
+      passesListContainer.innerHTML = `
+        <div class="col-12 text-center text-muted py-3 small">
+          No passes saved on this device yet. Time In below or enter a Student ID above to load a pass and access the Seminar Evaluation Form.
+        </div>
+      `;
+      return;
+    }
+
+    list.forEach((p, idx) => {
+      const live = livePassStatuses[p.student_id] || {};
+      const evalStatus = (live.eval_status || p.eval_status || "PENDING").toUpperCase();
+      const isEligible = Boolean(live.is_eligible !== undefined ? live.is_eligible : p.is_eligible);
+      const attEligible = Boolean(live.attendance_eligible !== undefined ? live.attendance_eligible : p.attendance_eligible);
+      const hasTimeout = Boolean(live.has_timeout);
+      const durMin = live.duration_min || 0;
+      const localDraft = getLocalDraft(p.student_id);
+      const hasDraft = evalStatus === "IN_PROGRESS" || hasAnyDraftAnswers(localDraft);
+
+      const colWrapper = document.createElement("div");
+      colWrapper.className = isTwoColumn ? "col-md-6 col-12" : "col-12";
+      colWrapper.id = `pass-card-${p.student_id}`;
+
+      const card = document.createElement("div");
+      card.className = "pass-qr-card text-center" + (isEligible ? " pass-approved" : "");
+
+      const qrId = `qr-code-${idx}`;
+      const nameHeadingClass = isTwoColumn ? "text-aclc-blue fw-bold mb-1 fs-3" : "text-aclc-blue fw-bold mb-1 fs-1";
+      const idTextClass = isTwoColumn ? "text-dark fw-bold font-monospace fs-4 mb-1" : "text-dark fw-bold font-monospace fs-3 mb-1";
+      const qrDim = isTwoColumn ? 170 : 210;
+
+      // Determine Certificate / Attendance Badge
+      let statusBadgeHtml = `<div class="badge bg-blue-lt text-aclc-blue px-2 py-1 mb-2">Show QR at Scanner for Time Out</div>`;
+      if (isEligible) {
+        statusBadgeHtml = `<div class="badge bg-green text-white px-3 py-1 mb-2">Certificate Approved (Duration &amp; Evaluation Met)</div>`;
+      } else if (evalStatus === "SUBMITTED" && !hasTimeout) {
+        statusBadgeHtml = `<div class="badge bg-azure-lt text-azure px-2 py-1 mb-2">Evaluation Submitted &middot; Scan QR for Time Out (${currentMinDurLabel})</div>`;
+      } else if (attEligible && evalStatus !== "SUBMITTED") {
+        statusBadgeHtml = `<div class="badge bg-warning text-dark px-2 py-1 mb-2">Duration Met (${durMin} min) &middot; Submit Evaluation for Certificate</div>`;
+      } else if (hasTimeout && !attEligible) {
+        statusBadgeHtml = `<div class="badge bg-danger-lt text-danger px-2 py-1 mb-2">Timed Out (${durMin} min &ndash; Under Required Duration)</div>`;
+      }
+
+      // Determine Per-Card Evaluation Button
+      let evalBtnHtml = "";
+      if (evalStatus === "SUBMITTED") {
+        evalBtnHtml = `
+          <button type="button" class="btn btn-success w-100 fw-bold mt-2" disabled>
+            Evaluation Submitted &amp; Locked
+          </button>
+        `;
+      } else if (isEvalOpen) {
+        const btnLabel = hasDraft ? "Resume Seminar Evaluation (Saved)" : "Take Seminar Evaluation";
+        const btnClass = hasDraft ? "btn btn-warning text-dark w-100 fw-bold mt-2" : "btn btn-hiv w-100 fw-bold mt-2";
+        evalBtnHtml = `
+          <button type="button" class="${btnClass} btn-open-eval"
+                  data-id="${p.student_id}"
+                  data-name="${p.student_name}"
+                  data-section="${p.section || ''}"
+                  data-token="${p.token || ''}">
+            ${btnLabel}
+          </button>
+        `;
+      } else {
+        evalBtnHtml = `
+          <button type="button" class="btn btn-outline-secondary w-100 fw-bold mt-2" disabled>
+            Evaluation Closed (Opens in Lecture)
+          </button>
+        `;
+      }
+
+      card.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+          <span class="badge bg-gold text-dark font-monospace fw-bold">PASS &middot; ${p.student_id}</span>
+          <button type="button" class="btn btn-sm btn-link text-danger text-decoration-none p-0 btn-remove-pass" data-id="${p.student_id}">Remove</button>
+        </div>
+        <div class="my-2">
+          <div class="pass-qr-frame">
+            <div id="${qrId}"></div>
+          </div>
+        </div>
+        <div>
+          <h3 class="${nameHeadingClass}">${p.student_name}</h3>
+          <div class="${idTextClass}">${p.student_id}</div>
+          <div class="text-muted small mb-2">${p.section || 'General'} &middot; ${p.time_fmt || p.time || 'Timed In'}</div>
+          ${statusBadgeHtml}
+          <div class="pt-1 border-top mt-2">
+            ${evalBtnHtml}
+          </div>
+        </div>
+      `;
+
+      colWrapper.appendChild(card);
+      passesListContainer.appendChild(colWrapper);
+
+      // Render QR code with Salted HMAC-SHA256 payload (ACLC:ID:TOKEN)
+      try {
+        const qrTarget = p.qr_data || (p.token ? `ACLC:${p.student_id}:${p.token}` : p.student_id);
+        new QRCode(document.getElementById(qrId), {
+          text: qrTarget,
+          width: qrDim,
+          height: qrDim,
+          colorDark: "#0A3981",
+          colorLight: "#FFFFFF",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch(e) {}
+    });
+
+    // Attach remove handlers
+    document.querySelectorAll(".btn-remove-pass").forEach(btn => {
+      btn.addEventListener("click", function() {
+        const id = this.getAttribute("data-id");
+        removePass(id);
+      });
+    });
+
+    // Attach evaluation open handlers
+    document.querySelectorAll(".btn-open-eval").forEach(btn => {
+      btn.addEventListener("click", function() {
+        const sid = this.getAttribute("data-id");
+        const sname = this.getAttribute("data-name");
+        const ssec = this.getAttribute("data-section");
+        const stok = this.getAttribute("data-token");
+        openEvaluationForPass(sid, sname, ssec, stok);
+      });
+    });
+  }
+
+  // =====================================================================
+  // SEMINAR EVALUATION FORM: LOCK ACQUISITION, AUTO-SAVE, RELEASE, SUBMIT
+  // =====================================================================
+  let activeEvalStudent = null; // { student_id, student_name, section, token }
+  let autosaveDebounceTimer = null;
+  let heartbeatIntervalTimer = null;
+  let lockCountdownTimer = null;
+  let pendingRetryPass = null;
+
+  const evalAutosaveIndicator = document.getElementById("evalAutosaveIndicator");
+  const evalFormErrorAlert = document.getElementById("evalFormErrorAlert");
+  const btnSubmitEvaluation = document.getElementById("btnSubmitEvaluation");
+
+  function collectFormDraft() {
+    const draft = {};
+    for (let i = 1; i <= 10; i++) {
+      const checked = document.querySelector(`input[name="q1_${i}"]:checked`);
+      draft[`q1_${i}`] = checked ? parseInt(checked.value, 10) : null;
+    }
+    for (let part of [2, 3]) {
+      for (let j = 1; j <= 3; j++) {
+        const el = document.getElementById(`eval_q${part}_${j}`);
+        draft[`q${part}_${j}`] = el ? el.value : "";
+      }
+    }
+    draft._ts = Date.now();
+    return draft;
+  }
+
+  function autoExpandTextarea(el) {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.max(68, el.scrollHeight) + "px";
+  }
+
+  function autoExpandAllEvalTextareas() {
+    document.querySelectorAll("#seminarEvaluationForm textarea.eval-auto-expand").forEach(t => {
+      autoExpandTextarea(t);
+    });
+  }
+
+  function populateFormFromDraft(draft) {
+    // Reset all radios and textareas first (critical for shared phones!)
+    document.querySelectorAll("#seminarEvaluationForm input[type='radio']").forEach(r => {
+      r.checked = false;
+    });
+    document.querySelectorAll("#seminarEvaluationForm textarea").forEach(t => {
+      t.value = "";
+      t.style.height = "68px";
+    });
+
+    if (!draft) return;
+    for (let i = 1; i <= 10; i++) {
+      const val = draft[`q1_${i}`];
+      if (val && val >= 1 && val <= 5) {
+        const radio = document.getElementById(`opt_q1_${i}_${val}`);
+        if (radio) radio.checked = true;
+      }
+    }
+    for (let part of [2, 3]) {
+      for (let j = 1; j <= 3; j++) {
+        const key = `q${part}_${j}`;
+        const el = document.getElementById(`eval_${key}`);
+        if (el && draft[key]) {
+          el.value = draft[key];
+        }
+      }
+    }
+    setTimeout(autoExpandAllEvalTextareas, 60);
+  }
+
+  function showLockConflictModal(studentId, studentName, section, token, message, retrySeconds) {
+    pendingRetryPass = { student_id: studentId, student_name: studentName, section: section, token: token };
+    document.getElementById("lockedModalStudentName").textContent = studentName || studentId;
+    document.getElementById("lockedModalStudentId").textContent = studentId;
+    document.getElementById("lockedModalMessage").textContent = message || "An evaluation is currently undergoing with this user on another device or session. The first active session has priority.";
+    const countdownEl = document.getElementById("lockedModalCountdown");
+    let rem = parseInt(retrySeconds || 35, 10);
+    countdownEl.textContent = rem;
+
+    if (lockCountdownTimer) clearInterval(lockCountdownTimer);
+    lockCountdownTimer = setInterval(() => {
+      rem = Math.max(0, rem - 1);
+      countdownEl.textContent = rem;
+      if (rem <= 0) {
+        clearInterval(lockCountdownTimer);
+      }
+    }, 1000);
+
+    window.openModalById("modalEvaluationLocked");
+  }
+
+  const btnRetryLockedEval = document.getElementById("btnRetryLockedEval");
+  if (btnRetryLockedEval) {
+    btnRetryLockedEval.addEventListener("click", function() {
+      window.closeModalById("modalEvaluationLocked");
+      if (pendingRetryPass) {
+        setTimeout(() => {
+          openEvaluationForPass(
+            pendingRetryPass.student_id,
+            pendingRetryPass.student_name,
+            pendingRetryPass.section,
+            pendingRetryPass.token,
+            true
+          );
+        }, 200);
+      }
+    });
+  }
+
+  async function openEvaluationForPass(studentId, studentName, section, token, forceTakeover = false) {
+    try {
+      const resp = await fetch("/api/evaluation/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: studentId,
+          session_id: clientSessionId,
+          token: token || "",
+          force: Boolean(forceTakeover)
+        })
+      });
+      const data = await resp.json();
+
+      if (resp.status === 409 || data.status === "locked") {
+        showLockConflictModal(studentId, studentName, section, token, data.message, data.retry_after_seconds);
+        return;
+      }
+
+      if (data.status === "already_submitted") {
+        updateStoredPassMeta(studentId, { eval_status: "SUBMITTED", is_eligible: data.is_eligible, cert_status: data.cert_status });
+        await syncPassesLiveStatus();
+        renderPassesUI();
+        return;
+      }
+
+      if (!resp.ok || data.status === "error" || data.status === "eval_closed") {
+        alert(data.message || "Unable to open the Seminar Evaluation Form right now.");
+        return;
+      }
+
+      // Successfully acquired lock for this student account!
+      activeEvalStudent = {
+        student_id: data.student_id,
+        student_name: data.student_name || studentName,
+        section: data.section || section,
+        token: token || ""
+      };
+
+      document.getElementById("evalActiveStudentName").textContent = activeEvalStudent.student_name;
+      document.getElementById("evalActiveStudentId").textContent = `(${activeEvalStudent.student_id})`;
+      evalFormErrorAlert.classList.add("d-none");
+
+      // Merge server draft and local draft (preferring whichever has more recent edits or more answers)
+      const serverDraft = data.draft || {};
+      const localDraft = getLocalDraft(activeEvalStudent.student_id);
+      const mergedDraft = Object.assign({}, serverDraft);
+      for (const k of Object.keys(localDraft)) {
+        if (localDraft[k] !== null && localDraft[k] !== undefined && String(localDraft[k]).trim() !== "") {
+          if (!mergedDraft[k] || (localDraft._ts && (!serverDraft._ts || localDraft._ts >= serverDraft._ts))) {
+            mergedDraft[k] = localDraft[k];
+          }
+        }
+      }
+
+      populateFormFromDraft(mergedDraft);
+      setLocalDraft(activeEvalStudent.student_id, mergedDraft);
+      evalAutosaveIndicator.textContent = "Draft restored & auto-save active";
+      evalAutosaveIndicator.className = "small fw-bold text-success";
+
+      window.openModalById("modalSeminarEvaluation");
+
+      if (heartbeatIntervalTimer) {
+        clearInterval(heartbeatIntervalTimer);
+        heartbeatIntervalTimer = null;
+      }
+
+    } catch (err) {
+      alert("Network error connecting to the evaluation server. Please check your Wi-Fi connection.");
+    }
+  }
+
+  async function pushAutosaveToServer(showSavingIndicator = true) {
+    if (!activeEvalStudent) return;
+    const draft = collectFormDraft();
+    setLocalDraft(activeEvalStudent.student_id, draft);
+
+    if (activeEvalStudent.is_preview) {
+      evalAutosaveIndicator.textContent = "All changes auto-saved locally (Preview Mode)";
+      evalAutosaveIndicator.className = "small fw-bold text-success";
+      return;
+    }
+
+    if (showSavingIndicator) {
+      evalAutosaveIndicator.textContent = "Saving changes...";
+      evalAutosaveIndicator.className = "small fw-bold text-muted";
+    }
+
+    try {
+      const resp = await fetch("/api/evaluation/autosave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: activeEvalStudent.student_id,
+          session_id: clientSessionId,
+          token: activeEvalStudent.token,
+          draft: draft
+        })
+      });
+      const data = await resp.json();
+      if (resp.status === 409 || data.status === "locked") {
+        // Another session took over after lease expiry
+        const cur = activeEvalStudent;
+        cleanupEvalModalTimers();
+        window.closeModalById("modalSeminarEvaluation");
+        showLockConflictModal(cur.student_id, cur.student_name, cur.section, cur.token, data.message, data.retry_after_seconds);
+        return;
+      }
+      if (data.status === "already_submitted") {
+        cleanupEvalModalTimers();
+        window.closeModalById("modalSeminarEvaluation");
+        await syncPassesLiveStatus();
+        renderPassesUI();
+        return;
+      }
+      if (resp.ok && data.status === "success") {
+        evalAutosaveIndicator.textContent = `All changes auto-saved (${data.saved_at_fmt || 'Just now'})`;
+        evalAutosaveIndicator.className = "small fw-bold text-success";
+      }
+    } catch (e) {
+      evalAutosaveIndicator.textContent = "Saved locally on device";
+      evalAutosaveIndicator.className = "small fw-bold text-warning";
+    }
+  }
+
+  function triggerImmediateLocalAndDebouncedServerSave() {
+    if (!activeEvalStudent) return;
+    const draft = collectFormDraft();
+    setLocalDraft(activeEvalStudent.student_id, draft);
+    evalAutosaveIndicator.textContent = "Saving draft...";
+    evalAutosaveIndicator.className = "small fw-bold text-muted";
+
+    if (autosaveDebounceTimer) clearTimeout(autosaveDebounceTimer);
+    autosaveDebounceTimer = setTimeout(() => {
+      pushAutosaveToServer(true);
+    }, 1000);
+  }
+
+  // Listen to every input/change inside the evaluation form
+  const seminarEvaluationForm = document.getElementById("seminarEvaluationForm");
+  if (seminarEvaluationForm) {
+    seminarEvaluationForm.addEventListener("input", function(e) {
+      if (e.target && e.target.classList.contains("eval-auto-expand")) {
+        autoExpandTextarea(e.target);
+      }
+      triggerImmediateLocalAndDebouncedServerSave();
+    });
+    seminarEvaluationForm.addEventListener("change", triggerImmediateLocalAndDebouncedServerSave);
+  }
+
+  const evalModalEl = document.getElementById("modalSeminarEvaluation");
+  if (evalModalEl) {
+    evalModalEl.addEventListener("shown.bs.modal", autoExpandAllEvalTextareas);
+  }
+
+  function cleanupEvalModalTimers() {
+    if (autosaveDebounceTimer) {
+      clearTimeout(autosaveDebounceTimer);
+      autosaveDebounceTimer = null;
+    }
+    if (heartbeatIntervalTimer) {
+      clearInterval(heartbeatIntervalTimer);
+      heartbeatIntervalTimer = null;
+    }
+    activeEvalStudent = null;
+  }
+
+  async function closeAndReleaseEvaluation() {
+    if (!activeEvalStudent) {
+      window.closeModalById("modalSeminarEvaluation");
+      return;
+    }
+    const cur = activeEvalStudent;
+    const draft = collectFormDraft();
+    setLocalDraft(cur.student_id, draft);
+    cleanupEvalModalTimers();
+    window.closeModalById("modalSeminarEvaluation");
+
+    if (!cur.is_preview) {
+      try {
+        await fetch("/api/evaluation/release", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            student_id: cur.student_id,
+            session_id: clientSessionId,
+            draft: draft
+          })
+        });
+      } catch(e) {}
+    }
+
+    await syncPassesLiveStatus();
+    renderPassesUI();
+  }
+
+  document.getElementById("btnFooterCloseEval").addEventListener("click", closeAndReleaseEvaluation);
+
+  // Release lock via sendBeacon if user closes browser tab or refreshes while modal is open
+  window.addEventListener("pagehide", function() {
+    if (activeEvalStudent && navigator.sendBeacon) {
+      const draft = collectFormDraft();
+      setLocalDraft(activeEvalStudent.student_id, draft);
+      const payload = JSON.stringify({
+        student_id: activeEvalStudent.student_id,
+        session_id: clientSessionId,
+        draft: draft
+      });
+      navigator.sendBeacon("/api/evaluation/release", payload);
+    }
+  });
+
+  // Submit Evaluation Handler
+  if (btnSubmitEvaluation) {
+    btnSubmitEvaluation.addEventListener("click", async function() {
+      if (!activeEvalStudent) return;
+      evalFormErrorAlert.classList.add("d-none");
+
+      const answers = collectFormDraft();
+      setLocalDraft(activeEvalStudent.student_id, answers);
+
+      // Client-side validation check
+      for (let i = 1; i <= 10; i++) {
+        if (!answers[`q1_${i}`]) {
+          evalFormErrorAlert.textContent = `Please select a rating (5 to 1) for Statement #${i} in Part I.`;
+          evalFormErrorAlert.classList.remove("d-none");
+          return;
+        }
+      }
+      for (let j = 1; j <= 3; j++) {
+        if (!answers[`q2_${j}`] || !answers[`q2_${j}`].trim()) {
+          evalFormErrorAlert.textContent = `Please answer Question #${j} in Part II (Learning Outcomes).`;
+          evalFormErrorAlert.classList.remove("d-none");
+          document.getElementById(`eval_q2_${j}`).focus();
+          return;
+        }
+      }
+      for (let j = 1; j <= 3; j++) {
+        if (!answers[`q3_${j}`] || !answers[`q3_${j}`].trim()) {
+          evalFormErrorAlert.textContent = `Please answer Question #${j} in Part III (Overall Assessment).`;
+          evalFormErrorAlert.classList.remove("d-none");
+          document.getElementById(`eval_q3_${j}`).focus();
+          return;
+        }
+      }
+
+      if (activeEvalStudent.is_preview) {
+        cleanupEvalModalTimers();
+        window.closeModalById("modalSeminarEvaluation");
+        timeInSuccessMsg.textContent = "Preview Evaluation Validated! In live use, open the evaluation from your Pass Card in My Passes to record it to your account.";
+        timeInSuccessAlert.classList.remove("d-none");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      btnSubmitEvaluation.disabled = true;
+      btnSubmitEvaluation.textContent = "Submitting...";
+
+      try {
+        const resp = await fetch("/api/evaluation/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            student_id: activeEvalStudent.student_id,
+            session_id: clientSessionId,
+            token: activeEvalStudent.token,
+            answers: answers
+          })
+        });
+        const res = await resp.json();
+
+        if (!resp.ok || res.status === "error" || res.status === "locked") {
+          evalFormErrorAlert.textContent = res.message || "Failed to submit evaluation.";
+          evalFormErrorAlert.classList.remove("d-none");
+          btnSubmitEvaluation.disabled = false;
+          btnSubmitEvaluation.textContent = "Submit Evaluation";
+          return;
+        }
+
+        const submittedId = activeEvalStudent.student_id;
+        updateStoredPassMeta(submittedId, {
+          eval_status: "SUBMITTED",
+          is_eligible: res.is_eligible,
+          cert_status: res.cert_status
+        });
+
+        cleanupEvalModalTimers();
+        window.closeModalById("modalSeminarEvaluation");
+
+        timeInSuccessMsg.textContent = res.message || "Evaluation submitted and locked!";
+        timeInSuccessAlert.classList.remove("d-none");
+        await syncPassesLiveStatus();
+        renderPassesUI();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (err) {
+        evalFormErrorAlert.textContent = "Network error submitting evaluation. Your answers are safely saved on this device.";
+        evalFormErrorAlert.classList.remove("d-none");
+      } finally {
+        btnSubmitEvaluation.disabled = false;
+        btnSubmitEvaluation.textContent = "Submit Evaluation";
+      }
+    });
+  }
+
+  // Toggle Passes View from Navbar
+  if (btnTogglePasses) {
+    btnTogglePasses.addEventListener("click", function() {
+      if (myPassesSection) {
+        myPassesSection.classList.remove("d-none");
+        togglePassesCollapsed();
+        if (!myPassesCollapseBody.classList.contains("d-none")) {
+          myPassesSection.scrollIntoView({ behavior: 'smooth' });
+        }
+      }
+    });
+  }
+
+  // Attendance Time-In Form Submit Handler
+  if (attendanceForm) {
+    attendanceForm.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      formErrorAlert.classList.add("d-none");
+
+      const studentIdInput = document.getElementById("student_id");
+      const idVal = studentIdInput.value.trim().toUpperCase();
+      const lastNameVal = document.getElementById("last_name").value.trim();
+      const firstNameVal = document.getElementById("first_name").value.trim();
+      const middleNameVal = document.getElementById("middle_name").value.trim() || "N/A";
+      const sexVal = document.getElementById("sex_select").value;
+      const ageVal = parseInt(ageInput.value.trim(), 10);
+      const sectionVal = document.getElementById("section").value.trim();
+      const emailVal = document.getElementById("email").value.trim();
+
+      let levelVal = "SHS";
+      if (document.getElementById("levelCollege").checked) levelVal = "COLLEGE";
+      if (document.getElementById("levelGuest").checked) levelVal = "NON_STUDENT";
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = "Recording...";
+
+      const payload = {
+        student_id: idVal,
+        last_name: lastNameVal,
+        first_name: firstNameVal,
+        middle_name: middleNameVal,
+        sex: sexVal,
+        age: ageVal,
+        email: emailVal,
+        level: levelVal,
+        section: sectionVal
+      };
+
+      try {
+        const resp = await fetch("/api/attendance/in", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const res = await resp.json();
+
+        if (!resp.ok || res.status === "error") {
+          formErrorAlert.textContent = res.message || "Failed to record Time In.";
+          formErrorAlert.classList.remove("d-none");
+          submitBtn.disabled = false;
+          submitBtn.innerText = "Time In";
+        } else {
+          // Save pass to local storage
+          savePass({
+            student_id: res.student_id,
+            student_name: res.student_name,
+            section: res.section,
+            level: res.level,
+            token: res.token,
+            qr_data: res.qr_data,
+            time: res.time,
+            time_fmt: res.time_fmt,
+            eval_status: res.eval_status || "PENDING",
+            is_eligible: res.is_eligible || false,
+            cert_status: res.cert_status || "PENDING"
+          });
+
+          // Reset form so a classmate sharing the phone can also register
+          attendanceForm.reset();
+          submitBtn.disabled = false;
+          submitBtn.innerText = "Time In";
+          updateCategoryLabels();
+
+          // Show success message and reveal passes list
+          timeInSuccessMsg.textContent = res.message || `Timed in as ${res.student_name}. Your pass and evaluation card are ready below.`;
+          timeInSuccessAlert.classList.remove("d-none");
+          formCard.classList.add("d-none");
+          myPassesSection.classList.remove("d-none");
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } catch (err) {
+        formErrorAlert.textContent = "Cannot connect to server. Please check your Wi-Fi connection.";
+        formErrorAlert.classList.remove("d-none");
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Time In";
+      }
+    });
+  }
+
+  const btnRegisterAnother = document.getElementById("btnRegisterAnother");
+  if (btnRegisterAnother) {
+    btnRegisterAnother.addEventListener("click", function() {
+      timeInSuccessAlert.classList.add("d-none");
+      if (formCard) {
+        formCard.classList.remove("d-none");
+        formCard.scrollIntoView({ behavior: "smooth" });
+        const sidInput = document.getElementById("student_id");
+        if (sidInput) sidInput.focus();
+      }
+    });
+  }
+
+  // Add Friend's Pass by Student ID
+  const btnAddFriendPass = document.getElementById("btnAddFriendPass");
+  const inputFriendId = document.getElementById("inputFriendId");
+  const friendPassAlert = document.getElementById("friendPassAlert");
+
+  async function handleAddFriendPass() {
+    if (!inputFriendId || !friendPassAlert) return;
+    const friendId = inputFriendId.value.trim().toUpperCase();
+    friendPassAlert.className = "small mt-2 d-none fw-bold";
+    if (!friendId) {
+      friendPassAlert.textContent = "Please enter a Student ID number.";
+      friendPassAlert.className = "small mt-2 text-danger fw-bold";
+      inputFriendId.focus();
+      return;
+    }
+
+    btnAddFriendPass.disabled = true;
+    btnAddFriendPass.textContent = "Looking up...";
+
+    try {
+      const resp = await fetch("/api/attendance/pass-lookup?student_id=" + encodeURIComponent(friendId));
+      const data = await resp.json();
+
+      if (!resp.ok || data.status === "error") {
+        friendPassAlert.textContent = data.message || "Student ID not found.";
+        friendPassAlert.className = "small mt-2 text-danger fw-bold";
+      } else {
+        savePass({
+          student_id: data.student_id,
+          student_name: data.student_name,
+          section: data.section,
+          level: data.level,
+          token: data.token,
+          qr_data: data.qr_data,
+          time: data.time,
+          time_fmt: data.time_fmt,
+          eval_status: data.eval_status || "PENDING",
+          attendance_eligible: data.attendance_eligible || false,
+          is_eligible: data.is_eligible || false,
+          cert_status: data.cert_status || "PENDING"
+        });
+        inputFriendId.value = "";
+        friendPassAlert.textContent = `Pass for ${data.student_name} added! They can now take their evaluation or show their QR pass below.`;
+        friendPassAlert.className = "small mt-2 text-success fw-bold";
+
+        setTimeout(() => {
+          const cardEl = document.getElementById(`pass-card-${data.student_id}`);
+          if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      }
+    } catch(err) {
+      friendPassAlert.textContent = "Network error looking up student pass.";
+      friendPassAlert.className = "small mt-2 text-danger fw-bold";
+    } finally {
+      btnAddFriendPass.disabled = false;
+      btnAddFriendPass.textContent = "Add Pass";
+    }
+  }
+
+  if (btnAddFriendPass) {
+    btnAddFriendPass.addEventListener("click", handleAddFriendPass);
+    if (inputFriendId) {
+      inputFriendId.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleAddFriendPass();
+        }
+      });
+    }
+  }
+
+  async function syncPassesLiveStatus() {
+    const list = getSavedPasses();
+    if (list.length === 0) return;
+    const ids = list.map(p => p.student_id);
+    try {
+      const resp = await fetch("/api/attendance/passes-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_ids: ids })
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data && data.passes) {
+        livePassStatuses = data.passes;
+        renderPassesUI();
+      }
+    } catch(e) {}
+  }
+
+  // Initialize saved passes on load
+  renderPassesUI();
+  syncPassesLiveStatus();
+  if (getSavedPasses().length === 0 && "{{ status }}" === "Time In") {
+    setPassesExpanded(false);
+  } else {
+    setPassesExpanded(true);
+  }
+
+  // Support direct test-try preview link (?try_quiz=1 or /try-evaluation)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get("try_quiz") === "1") {
+    const saved = getSavedPasses();
+    if (saved.length > 0 && isEvalOpen) {
+      openEvaluationForPass(saved[0].student_id, saved[0].student_name, saved[0].section, saved[0].token);
+    } else {
+      activeEvalStudent = {
+        student_id: saved.length > 0 ? saved[0].student_id : "PREVIEW-2026",
+        student_name: saved.length > 0 ? saved[0].student_name : "Test Participant (Preview Mode)",
+        section: saved.length > 0 ? saved[0].section : "CS31A",
+        token: saved.length > 0 ? (saved[0].token || "") : "",
+        is_preview: !isEvalOpen || saved.length === 0
+      };
+      document.getElementById("evalActiveStudentName").textContent = activeEvalStudent.student_name;
+      document.getElementById("evalActiveStudentId").textContent = `(${activeEvalStudent.student_id})`;
+      const localDraft = getLocalDraft(activeEvalStudent.student_id);
+      populateFormFromDraft(localDraft);
+      evalAutosaveIndicator.textContent = "Preview & local auto-save active";
+      evalAutosaveIndicator.className = "small fw-bold text-success";
+      window.openModalById("modalSeminarEvaluation");
+    }
+  }
+
+  // Background status sync (Every 4 seconds)
+  setInterval(async function() {
+    try {
+      const resp = await fetch("/api/kiosk-live");
+      if (!resp.ok) return;
+      const data = await resp.json();
+      
+      const sessionText = document.getElementById("activeSessionText");
+      const statusBadge = document.getElementById("activeStatusBadge");
+      const evalStateBadge = document.getElementById("activeEvalStateBadge");
+      const titleEl = document.getElementById("kioskEventTitle");
+      const noticeText = document.getElementById("announcementText");
+      const noticeBox = document.getElementById("announcementContainer");
+
+      if (sessionText && data.session) sessionText.textContent = data.session + " Session";
+      if (titleEl && data.event_title) titleEl.textContent = data.event_title;
+      if (data.min_duration_label) {
+        currentMinDurLabel = data.min_duration_label;
+        document.querySelectorAll(".min-dur-text").forEach(el => {
+          el.textContent = data.min_duration_label;
+        });
+      }
+
+      const prevEvalOpen = isEvalOpen;
+      isEvalOpen = Boolean(data.eval_open);
+      if (evalStateBadge) {
+        evalStateBadge.textContent = isEvalOpen ? "Evaluation Open" : "Evaluation Closed";
+        evalStateBadge.className = isEvalOpen
+          ? "badge bg-hiv-crimson text-white px-3 py-2 fs-5 fw-bold"
+          : "badge bg-secondary-lt text-muted px-3 py-2 fs-5 fw-bold";
+      }
+      if (prevEvalOpen !== isEvalOpen) {
+        renderPassesUI();
+      }
+
+      if (statusBadge) {
+        statusBadge.textContent = data.status;
+        if (data.status === "Time Out") {
+          statusBadge.className = "badge bg-orange text-white px-3 py-2 fs-5 fw-bold";
+        } else if (data.status === "Closed") {
+          statusBadge.className = "badge bg-secondary text-white px-3 py-2 fs-5 fw-bold";
+        } else {
+          statusBadge.className = "badge bg-green text-white px-3 py-2 fs-5 fw-bold";
+        }
+      }
+
+      if (noticeBox && noticeText) {
+        if (data.kiosk_announcement) {
+          noticeText.textContent = data.kiosk_announcement;
+          noticeBox.classList.remove("d-none");
+        } else {
+          noticeBox.classList.add("d-none");
+        }
+      }
+
+      // Automatically switch views if phase changes
+      const timeOutNotice = document.getElementById("timeOutActiveNotice");
+      const closedNotice = document.getElementById("closedNotice");
+
+      if (data.status === "Time In") {
+        if (formCard && !timeInSuccessAlert.classList.contains("d-none")) {
+          // Student already submitted in this session
+        } else if (formCard) {
+          formCard.classList.remove("d-none");
+        }
+        if (timeOutNotice) timeOutNotice.classList.add("d-none");
+        if (closedNotice) closedNotice.classList.add("d-none");
+      } else if (data.status === "Time Out") {
+        if (formCard) formCard.classList.add("d-none");
+        if (timeOutNotice) timeOutNotice.classList.remove("d-none");
+        if (closedNotice) closedNotice.classList.add("d-none");
+        if (myPassesSection) myPassesSection.classList.remove("d-none");
+      } else {
+        if (formCard) formCard.classList.add("d-none");
+        if (timeOutNotice) timeOutNotice.classList.add("d-none");
+        if (closedNotice) closedNotice.classList.remove("d-none");
+        if (myPassesSection) myPassesSection.classList.remove("d-none");
+      }
+
+      await syncPassesLiveStatus();
+    } catch(e) {}
+  }, 4000);
+});
+</script>
+{% endblock %}

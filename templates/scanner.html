@@ -1,0 +1,570 @@
+{% extends "base.html" %}
+
+{% block title %}ACLC Scanner{% endblock %}
+
+{% block extra_head %}
+<!-- Offline HTML5 QR Scanner Library -->
+<script src="/static/js/html5-qrcode.min.js"></script>
+<style>
+  #reader {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    background: #0f172a;
+    border: 2px solid var(--aclc-blue);
+  }
+  #reader video {
+    display: block;
+    width: 100% !important;
+    height: auto !important;
+    object-fit: cover;
+  }
+  @keyframes scanPulse {
+    0% { transform: scale(0.98); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .scan-pop {
+    animation: scanPulse 0.2s ease-out;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top Header -->
+<header class="navbar navbar-expand-md bg-hiv-header d-print-none shadow-sm border-bottom border-aclc-gold">
+  <div class="container-xl py-2">
+    <div class="d-flex align-items-center">
+      <img src="/static/img/aclc-logo.png" alt="ACLC" width="40" height="40" class="rounded-circle me-3 border border-2 border-warning">
+      <div>
+        <div class="d-flex align-items-center gap-2">
+          <h3 class="mb-0 text-white fw-bold">Scanner</h3>
+          <span class="badge bg-hiv-crimson text-white fw-bold">HIV AWARENESS</span>
+        </div>
+        <small class="text-warning text-uppercase fw-bold" id="scannerSessionLabel">{{ active_session_label }}</small>
+      </div>
+    </div>
+    <div class="navbar-nav flex-row order-md-last ms-auto gap-2">
+      <button type="button" id="btnDoneScanning" class="btn btn-gold btn-sm fw-bold">
+        Done
+      </button>
+      <a href="/admin" class="btn btn-outline-light btn-sm">Dashboard</a>
+    </div>
+  </div>
+</header>
+
+<div class="page-body my-4">
+  <div class="container-xl" style="max-width: 760px;">
+
+    <!-- Warning Banner when system is not in Time Out mode -->
+    <div id="scannerPhaseWarning" class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 py-2 px-3 mb-3 shadow-sm {% if status == 'Time Out' %}d-none{% endif %}">
+      <div class="small fw-bold text-dark">
+        Notice: System is currently in <strong id="scannerWarnModeText">{{ active_session_label }}</strong> mode. Switch to Time Out mode to scan exiting students.
+      </div>
+      <button type="button" id="btnQuickEnableTimeOut" class="btn btn-warning btn-sm fw-bold text-dark">
+        Switch to Time Out Mode Now
+      </button>
+    </div>
+
+    <!-- Camera Control Card -->
+    <div class="card mb-3 shadow-sm border-0">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+        <span class="fw-bold text-aclc-blue">Camera Scanner</span>
+        <div class="d-flex align-items-center gap-2">
+          <label for="qrFileInput" class="btn btn-outline-primary btn-sm fw-bold mb-0">
+            Snap QR Photo
+          </label>
+          <input type="file" id="qrFileInput" accept="image/*" capture="environment" class="d-none">
+          <button type="button" id="btnToggleCamera" class="btn btn-aclc btn-sm fw-bold">
+            Start Camera
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-3 text-center">
+        <!-- Viewfinder -->
+        <div id="cameraContainer" class="d-none">
+          <div id="reader"></div>
+          <small class="text-muted d-block mt-2">Hold student QR pass steadily inside the frame</small>
+        </div>
+
+        <div id="cameraIdleAlert" class="py-3 text-muted">
+          <p class="mb-0">Tap <strong>Start Camera</strong> for live scanning, <strong>Snap QR Photo</strong> on mobile phones, or enter Student ID below.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback Banner / Result Box (Immediately visible below camera) -->
+    <div id="scanResultCard" class="card mb-3 shadow-sm border-0 d-none">
+      <div class="card-status-top bg-success" id="resultStatusTop"></div>
+      <div class="card-body p-3 text-center">
+        <div class="badge bg-green text-white fs-3 px-3 py-1 mb-2" id="resultBadge">Time Out Recorded</div>
+        <h2 class="text-aclc-blue fw-bold mb-1 fs-1" id="resultStudentName"></h2>
+        <div class="text-dark fw-bold font-monospace fs-3 mb-2" id="resultStudentId"></div>
+        <div class="text-muted small mb-2" id="resultDetails"></div>
+
+        <div class="p-2 px-3 rounded border" id="resultDurationBox">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="fw-bold" id="resultDurationText">Duration: 0 min</span>
+            <span class="badge" id="resultEligibleBadge">Eligible</span>
+          </div>
+          <div class="small mt-1 text-start" id="resultNoteText"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error Box -->
+    <div id="scanErrorBox" class="alert alert-danger d-none py-3 px-4 mb-3 text-center fw-bold shadow-sm"></div>
+
+    <!-- Manual Entry Card -->
+    <div class="card mb-3 shadow-sm border-0">
+      <div class="card-body p-3">
+        <label class="form-label fw-bold text-aclc-blue mb-1">Manual Entry / USB Barcode Scanner</label>
+        <form id="manualScanForm" class="d-flex gap-2">
+          <input type="text" id="manualScanInput" class="form-control form-control-lg font-monospace text-uppercase" placeholder="Student ID (e.g. 2024-01234)" autofocus autocomplete="off">
+          <button type="submit" id="btnManualSubmit" class="btn btn-aclc fw-bold px-4">
+            Time Out
+          </button>
+        </form>
+        <small class="text-muted mt-1 d-block">Press Enter to submit immediately</small>
+      </div>
+    </div>
+
+    <!-- Recent Scans List -->
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+        <span class="fw-bold text-aclc-blue">Recent Scans</span>
+        <span class="badge bg-primary text-white" id="sessionCountBadge">0 Scanned</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Student ID</th>
+              <th>Name</th>
+              <th>Section</th>
+              <th>Duration</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="recentScansTbody">
+            <tr id="emptyScanRow">
+              <td colspan="6" class="text-center text-muted py-4">No scans recorded in this session.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Attribution Footer -->
+    <div class="text-center text-muted small mt-4 fw-bold">
+      Prepared by: CS31A
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal: Session Summary -->
+<div class="modal fade" id="sessionSummaryModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow border-0">
+      <div class="modal-header bg-aclc-blue text-white">
+        <h5 class="modal-title fw-bold">Scanning Session Summary</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 text-center">
+        <div class="row g-3 my-2">
+          <div class="col-4">
+            <div class="p-3 bg-light rounded border text-center">
+              <div class="fs-1 fw-bold text-dark" id="summaryTotal">0</div>
+              <small class="text-muted text-uppercase fw-bold">Total Scanned</small>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="p-3 bg-success-lt rounded border border-success text-center">
+              <div class="fs-1 fw-bold text-success" id="summaryEligible">0</div>
+              <small class="text-success text-uppercase fw-bold">Eligible</small>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="p-3 bg-warning-lt rounded border border-warning text-center">
+              <div class="fs-1 fw-bold text-warning" id="summaryIneligible">0</div>
+              <small class="text-warning text-uppercase fw-bold">Under Duration</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Continue</button>
+        <a href="/admin" class="btn btn-aclc fw-bold">Return to Dashboard</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const btnToggleCamera = document.getElementById("btnToggleCamera");
+  const cameraContainer = document.getElementById("cameraContainer");
+  const cameraIdleAlert = document.getElementById("cameraIdleAlert");
+  const manualScanForm = document.getElementById("manualScanForm");
+  const manualScanInput = document.getElementById("manualScanInput");
+  const btnManualSubmit = document.getElementById("btnManualSubmit");
+
+  const scanResultCard = document.getElementById("scanResultCard");
+  const resultStatusTop = document.getElementById("resultStatusTop");
+  const resultBadge = document.getElementById("resultBadge");
+  const resultStudentName = document.getElementById("resultStudentName");
+  const resultStudentId = document.getElementById("resultStudentId");
+  const resultDetails = document.getElementById("resultDetails");
+  const resultDurationBox = document.getElementById("resultDurationBox");
+  const resultDurationText = document.getElementById("resultDurationText");
+  const resultEligibleBadge = document.getElementById("resultEligibleBadge");
+  const resultNoteText = document.getElementById("resultNoteText");
+  const scanErrorBox = document.getElementById("scanErrorBox");
+
+  const recentScansTbody = document.getElementById("recentScansTbody");
+  const emptyScanRow = document.getElementById("emptyScanRow");
+  const sessionCountBadge = document.getElementById("sessionCountBadge");
+  const btnDoneScanning = document.getElementById("btnDoneScanning");
+
+  let html5QrCode = null;
+  let isCameraScanning = false;
+  let totalScanned = 0;
+  let countEligible = 0;
+  let countIneligible = 0;
+  const recentDebounceMap = new Map();
+
+  // Audio synthesis feedback (100% offline Web Audio API)
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  function playChime(success = true) {
+    try {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (success) {
+        osc.frequency.setValueAtTime(587.33, now);
+        osc.frequency.setValueAtTime(880.00, now + 0.1);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else {
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(220, now);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+    } catch(e) {}
+  }
+
+  // Time Out Submission
+  async function submitTimeOut(studentIdRaw) {
+    scanErrorBox.classList.add("d-none");
+    const sid = studentIdRaw.trim();
+    if (!sid) return;
+
+    // 8-second debounce for same code
+    const nowMs = Date.now();
+    if (recentDebounceMap.has(sid) && (nowMs - recentDebounceMap.get(sid)) < 8000) {
+      return;
+    }
+    recentDebounceMap.set(sid, nowMs);
+
+    btnManualSubmit.disabled = true;
+    manualScanInput.disabled = true;
+
+    try {
+      const resp = await fetch("/api/attendance/out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: sid })
+      });
+
+      if (resp.status === 401) {
+        playChime(false);
+        scanErrorBox.textContent = "Admin session expired. Redirecting to login...";
+        scanErrorBox.classList.remove("d-none");
+        setTimeout(() => {
+          window.location.href = "/admin/login?next=/admin/scanner";
+        }, 1200);
+        return;
+      }
+
+      const res = await resp.json();
+
+      if (!resp.ok || res.status === "error") {
+        recentDebounceMap.delete(sid);
+        playChime(false);
+        scanErrorBox.textContent = res.message || "Failed to record Time Out.";
+        scanErrorBox.classList.remove("d-none");
+        scanResultCard.classList.add("d-none");
+      } else {
+        playChime(true);
+        totalScanned++;
+        if (res.is_eligible) countEligible++;
+        else countIneligible++;
+
+        sessionCountBadge.textContent = `${totalScanned} Scanned`;
+
+        // Populate Result Card
+        scanResultCard.classList.remove("d-none", "scan-pop");
+        void scanResultCard.offsetWidth;
+        scanResultCard.classList.add("scan-pop");
+        resultStudentName.textContent = res.student_name;
+        resultStudentId.textContent = res.student_id;
+        resultDetails.textContent = res.message || `Timed out at ${res.time_fmt || res.time}`;
+
+        const isEligible = res.is_eligible;
+        const attEligible = res.attendance_eligible;
+        resultDurationText.textContent = `Duration: ${Math.round(res.duration_min)} min`;
+
+        if (res.status === "already_timed_out") {
+          resultBadge.className = "badge bg-warning text-dark fs-3 px-3 py-1 mb-2";
+          resultBadge.textContent = "Already Timed Out";
+        } else {
+          resultBadge.className = "badge bg-green text-white fs-3 px-3 py-1 mb-2";
+          resultBadge.textContent = "Time Out Recorded";
+        }
+
+        if (isEligible) {
+          resultStatusTop.className = "card-status-top bg-success";
+          resultDurationBox.className = "p-2 px-3 rounded border border-success bg-success-lt";
+          resultEligibleBadge.className = "badge bg-green text-white";
+          resultEligibleBadge.textContent = "Cert Approved";
+          resultNoteText.className = "small mt-1 text-success fw-bold";
+          resultNoteText.textContent = res.note || "Certificate Approved (Duration & Evaluation Complete).";
+        } else if (attEligible) {
+          resultStatusTop.className = "card-status-top bg-info";
+          resultDurationBox.className = "p-2 px-3 rounded border border-info bg-azure-lt";
+          resultEligibleBadge.className = "badge bg-azure text-white";
+          resultEligibleBadge.textContent = "Duration Met";
+          resultNoteText.className = "small mt-1 text-dark fw-bold";
+          resultNoteText.textContent = res.note || "Duration met. Student must submit Seminar Evaluation for Certificate.";
+        } else {
+          resultStatusTop.className = "card-status-top bg-warning";
+          resultDurationBox.className = "p-2 px-3 rounded border border-warning bg-warning-lt";
+          resultEligibleBadge.className = "badge bg-orange text-white";
+          resultEligibleBadge.textContent = "Under Duration";
+          resultNoteText.className = "small mt-1 text-danger fw-bold";
+          resultNoteText.textContent = res.note || "Under required duration.";
+        }
+
+        // Add to Recent Scans Table
+        if (emptyScanRow) emptyScanRow.classList.add("d-none");
+        const row = document.createElement("tr");
+        const statusBadgeLabel = isEligible ? "Approved" : (attEligible ? "Needs Eval" : "Under");
+        const statusBadgeCls = isEligible ? "bg-green" : (attEligible ? "bg-azure" : "bg-warning");
+        row.innerHTML = `
+          <td class="font-monospace small">${res.time_fmt || res.time.split(' ')[1]}</td>
+          <td class="font-monospace fw-bold">${res.student_id}</td>
+          <td class="fw-bold">${res.student_name}</td>
+          <td><span class="badge bg-secondary-lt">Logged</span></td>
+          <td>${Math.round(res.duration_min)}m</td>
+          <td><span class="badge ${statusBadgeCls} text-white">${statusBadgeLabel}</span></td>
+        `;
+        recentScansTbody.insertBefore(row, recentScansTbody.firstChild);
+      }
+    } catch(err) {
+      recentDebounceMap.delete(sid);
+      playChime(false);
+      scanErrorBox.textContent = "Network error. Please check server connection.";
+      scanErrorBox.classList.remove("d-none");
+    } finally {
+      btnManualSubmit.disabled = false;
+      manualScanInput.disabled = false;
+      manualScanInput.value = "";
+      manualScanInput.focus();
+    }
+  }
+
+  // Camera Management
+  let isCameraTransitioning = false;
+
+  async function startCamera() {
+    if (isCameraTransitioning || isCameraScanning) return;
+    isCameraTransitioning = true;
+    btnToggleCamera.disabled = true;
+    cameraContainer.classList.remove("d-none");
+    cameraIdleAlert.classList.add("d-none");
+    btnToggleCamera.className = "btn btn-danger btn-sm fw-bold";
+    btnToggleCamera.textContent = "Starting...";
+
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode("reader");
+    }
+
+    const config = {
+      fps: 15,
+      qrbox: { width: 220, height: 220 },
+      aspectRatio: 1.0
+    };
+
+    try {
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => submitTimeOut(decodedText),
+        () => {}
+      );
+      isCameraScanning = true;
+      btnToggleCamera.textContent = "Stop Camera";
+    } catch (errEnv) {
+      try {
+        await html5QrCode.start(
+          { facingMode: "user" },
+          config,
+          (decodedText) => submitTimeOut(decodedText),
+          () => {}
+        );
+        isCameraScanning = true;
+        btnToggleCamera.textContent = "Stop Camera";
+      } catch (errUser) {
+        isCameraScanning = false;
+        cameraContainer.classList.add("d-none");
+        cameraIdleAlert.classList.remove("d-none");
+        btnToggleCamera.className = "btn btn-aclc btn-sm fw-bold";
+        btnToggleCamera.textContent = "Start Camera";
+        scanErrorBox.textContent = "Camera access was not available. Grant camera permission or use Manual Entry below.";
+        scanErrorBox.classList.remove("d-none");
+      }
+    } finally {
+      isCameraTransitioning = false;
+      btnToggleCamera.disabled = false;
+    }
+  }
+
+  async function stopCamera() {
+    if (isCameraTransitioning) return;
+    isCameraTransitioning = true;
+    btnToggleCamera.disabled = true;
+    try {
+      if (html5QrCode && isCameraScanning) {
+        await html5QrCode.stop();
+        html5QrCode.clear();
+      }
+    } catch (e) {
+    } finally {
+      isCameraScanning = false;
+      isCameraTransitioning = false;
+      btnToggleCamera.disabled = false;
+      cameraContainer.classList.add("d-none");
+      cameraIdleAlert.classList.remove("d-none");
+      btnToggleCamera.className = "btn btn-aclc btn-sm fw-bold";
+      btnToggleCamera.textContent = "Start Camera";
+    }
+  }
+
+  btnToggleCamera.addEventListener("click", function() {
+    if (isCameraScanning) stopCamera();
+    else startCamera();
+  });
+
+  // Snap QR Photo / File Scanner (Works on all mobile phones over plain HTTP LAN)
+  const qrFileInput = document.getElementById("qrFileInput");
+  if (qrFileInput) {
+    qrFileInput.addEventListener("change", async function(e) {
+      if (!e.target.files || e.target.files.length === 0) return;
+      const imageFile = e.target.files[0];
+      if (isCameraScanning) {
+        await stopCamera();
+      }
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+      }
+      try {
+        const decodedText = await html5QrCode.scanFile(imageFile, false);
+        submitTimeOut(decodedText);
+      } catch (err) {
+        playChime(false);
+        scanErrorBox.textContent = "Could not detect a QR code in the image. Please hold the camera steady and try again, or enter Student ID manually.";
+        scanErrorBox.classList.remove("d-none");
+      } finally {
+        qrFileInput.value = "";
+      }
+    });
+  }
+
+  manualScanForm.addEventListener("submit", function(e) {
+    e.preventDefault();
+    submitTimeOut(manualScanInput.value);
+  });
+
+  // Done Button Action
+  btnDoneScanning.addEventListener("click", function() {
+    stopCamera();
+    document.getElementById("summaryTotal").textContent = totalScanned;
+    document.getElementById("summaryEligible").textContent = countEligible;
+    document.getElementById("summaryIneligible").textContent = countIneligible;
+    window.openModalById("sessionSummaryModal");
+  });
+
+  // Quick Enable Time Out Mode button
+  let currentScannerSession = "{{ 'AFTERNOON' if session == 'Afternoon' else 'MORNING' }}";
+  const scannerPhaseWarning = document.getElementById("scannerPhaseWarning");
+  const scannerWarnModeText = document.getElementById("scannerWarnModeText");
+  const btnQuickEnableTimeOut = document.getElementById("btnQuickEnableTimeOut");
+
+  if (btnQuickEnableTimeOut) {
+    btnQuickEnableTimeOut.addEventListener("click", async function() {
+      btnQuickEnableTimeOut.disabled = true;
+      btnQuickEnableTimeOut.textContent = "Switching...";
+      const targetPhase = `${currentScannerSession}_OUT`;
+      try {
+        const resp = await fetch("/api/admin/set-phase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phase: targetPhase })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const lbl = document.getElementById("scannerSessionLabel");
+          if (lbl) lbl.textContent = `${data.session} ${data.event_status}`;
+          if (scannerPhaseWarning) scannerPhaseWarning.classList.add("d-none");
+          scanErrorBox.classList.add("d-none");
+        }
+      } catch(e) {
+      } finally {
+        btnQuickEnableTimeOut.disabled = false;
+        btnQuickEnableTimeOut.textContent = "Switch to Time Out Mode Now";
+      }
+    });
+  }
+
+  // Background phase label sync
+  setInterval(async function() {
+    try {
+      const resp = await fetch("/api/kiosk-live");
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const lbl = document.getElementById("scannerSessionLabel");
+      if (lbl && data.active_session_label) lbl.textContent = data.active_session_label;
+      if (data.session) {
+        currentScannerSession = data.session === "Afternoon" ? "AFTERNOON" : "MORNING";
+      }
+      if (scannerPhaseWarning) {
+        if (data.status === "Time Out") {
+          scannerPhaseWarning.classList.add("d-none");
+        } else {
+          if (scannerWarnModeText && data.active_session_label) {
+            scannerWarnModeText.textContent = data.active_session_label;
+          }
+          scannerPhaseWarning.classList.remove("d-none");
+        }
+      }
+    } catch(e) {}
+  }, 4000);
+});
+</script>
+{% endblock %}

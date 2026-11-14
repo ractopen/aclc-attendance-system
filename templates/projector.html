@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}ACLC Projector Display | HIV Awareness Seminar{% endblock %}
+
+{% block extra_head %}
+<style>
+  body {
+    background: linear-gradient(145deg, #061A3A 0%, #0A2558 55%, #4C0519 100%) !important;
+    color: #FFFFFF !important;
+    overflow-x: hidden;
+  }
+  .qr-frame {
+    background: #FFFFFF;
+    border: 6px solid var(--aclc-gold);
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    display: inline-block;
+  }
+  .qr-card-box {
+    background: rgba(10, 37, 86, 0.92);
+    border: 2px solid rgba(234, 163, 21, 0.5);
+    border-radius: 16px;
+    padding: 24px 28px;
+    min-width: 300px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+  .announcement-box-proj {
+    background: rgba(10, 57, 129, 0.85);
+    border: 2px solid var(--aclc-gold);
+    border-radius: 12px;
+    color: #FFFFFF;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page page-center py-4">
+  <div class="container text-center">
+    
+    <!-- Header -->
+    <div class="mb-3">
+      <div class="d-inline-flex align-items-center flex-wrap justify-content-center gap-2 mb-2">
+        <img src="/static/img/aclc-logo.png" alt="ACLC" width="54" height="54" class="rounded-circle shadow border border-2 border-warning">
+        <span class="badge bg-warning text-dark fs-3 px-3 py-1 fw-bold">ACLC COLLEGE OF MANDAUE</span>
+        <span class="badge bg-hiv-crimson text-white fs-3 px-3 py-1 fw-bold">TOPIC: HIV AWARENESS</span>
+        <span id="projEvalBadge" class="badge {% if eval_open %}bg-green text-white{% else %}bg-secondary text-white{% endif %} fs-3 px-3 py-1 fw-bold">
+          {% if eval_open %}EVALUATION: OPEN{% else %}EVALUATION: CLOSED{% endif %}
+        </span>
+        <span id="projClock" class="badge bg-dark text-white fs-3 px-3 py-1 font-monospace">00:00:00</span>
+      </div>
+      <h1 class="display-4 fw-bold text-white mb-1" id="projTitle">{{ event_title }}</h1>
+      <div class="fs-2 fw-bold text-warning" id="projStatusLine">
+        {% if status == 'Time In' %}
+          Time In is open &middot; Connect to Wi-Fi and scan QR to record attendance
+        {% elif status == 'Time Out' %}
+          Time Out is open &middot; Present your pass at the exit scanner &amp; complete the Seminar Evaluation Form
+        {% else %}
+          Attendance is currently closed
+        {% endif %}
+      </div>
+      <div class="text-white-50 fs-4 mt-1">
+        Certificate Eligibility: <strong class="text-white" id="projMinDurLabel">{{ min_duration_label }}</strong> Attendance + <strong class="text-warning">Seminar Evaluation Form</strong>
+      </div>
+    </div>
+
+    <!-- Announcement Banner -->
+    <div class="row justify-content-center mb-3 {% if not proj_announcement %}d-none{% endif %}" id="projAnnouncementRow">
+      <div class="col-lg-10">
+        <div class="announcement-box-proj py-2 px-4 fs-3 fw-bold">
+          <span id="projAnnouncementText">{{ proj_announcement }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Code Display (Side-by-Side or Centered) -->
+    <div class="row justify-content-center align-items-center g-4 my-2" id="qrDisplayRow">
+      
+      <!-- Wi-Fi Auto-Connect QR Card -->
+      <div class="col-auto text-center {% if not proj_show_wifi_qr %}d-none{% endif %}" id="colWifiQr">
+        <div class="qr-card-box">
+          <span class="badge bg-gold text-dark fs-3 px-3 py-1 fw-bold mb-2 d-inline-block">
+            GUEST WI-FI
+          </span>
+          <div class="qr-frame mx-auto mb-2 d-block">
+            <img id="wifiQrImage" src="/api/qr/wifi" alt="Wi-Fi QR Code" width="250" height="250" class="img-fluid rounded">
+          </div>
+          <div class="text-white fw-bold fs-3" id="wifiSsidLabel">
+            {{ wifi_ssid or 'Event_Attendance' }}
+          </div>
+          <div class="text-white-50 small" id="wifiPassLabel">
+            {% if wifi_password %}Password: <span class="font-monospace text-warning fw-bold">{{ wifi_password }}</span>{% else %}Open Network (No Password){% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Student Page QR Card -->
+      <div class="col-auto text-center {% if not proj_show_form_qr %}d-none{% endif %}" id="colFormQr">
+        <div class="qr-card-box">
+          <span class="badge bg-hiv-crimson text-white fs-3 px-3 py-1 fw-bold mb-2 d-inline-block border border-light">
+            ATTENDANCE &amp; EVALUATION
+          </span>
+          <div class="qr-frame mx-auto mb-2 d-block">
+            <img id="formQrImage" src="/api/qr" alt="Student Page QR Code" width="250" height="250" class="img-fluid rounded">
+          </div>
+          <div class="text-white fw-bold fs-3">
+            Scan to Open Pass &amp; Quiz
+          </div>
+          <div class="text-white-50 font-monospace small text-truncate" style="max-width: 280px;" id="formUrlLabel">
+            {{ kiosk_url or base_url }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Notice when both are hidden -->
+      <div class="col-12 text-center text-white-50 py-4 {% if proj_show_form_qr or proj_show_wifi_qr %}d-none{% endif %}" id="bothHiddenNotice">
+        <em>QR codes are currently hidden by the organizer.</em>
+      </div>
+
+    </div>
+
+    <!-- Attribution Footer -->
+    <div class="text-white-50 small mt-4 fw-bold">
+      Prepared by: CS31A
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  function updateClock() {
+    const now = new Date();
+    document.getElementById("projClock").textContent = now.toLocaleTimeString();
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  let lastWifiSig = "{{ (wifi_ssid or 'Event_Attendance') ~ '|' ~ (wifi_password or '') }}";
+  let lastFormUrl = "{{ kiosk_url or base_url }}";
+
+  // Background real-time sync with admin settings
+  setInterval(async function() {
+    try {
+      const resp = await fetch("/api/kiosk-live");
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      const titleEl = document.getElementById("projTitle");
+      const statusLineEl = document.getElementById("projStatusLine");
+      const evalBadgeEl = document.getElementById("projEvalBadge");
+      const minDurLabelEl = document.getElementById("projMinDurLabel");
+      const annRow = document.getElementById("projAnnouncementRow");
+      const annText = document.getElementById("projAnnouncementText");
+      const colWifi = document.getElementById("colWifiQr");
+      const colForm = document.getElementById("colFormQr");
+      const wifiSsidLabel = document.getElementById("wifiSsidLabel");
+      const wifiPassLabel = document.getElementById("wifiPassLabel");
+      const formUrlLabel = document.getElementById("formUrlLabel");
+      const wifiQrImage = document.getElementById("wifiQrImage");
+      const formQrImage = document.getElementById("formQrImage");
+      const bothHidden = document.getElementById("bothHiddenNotice");
+
+      if (titleEl && data.event_title) titleEl.textContent = data.event_title;
+      if (minDurLabelEl && data.min_duration_label) minDurLabelEl.textContent = data.min_duration_label;
+
+      if (evalBadgeEl) {
+        if (data.eval_open) {
+          evalBadgeEl.textContent = "EVALUATION: OPEN";
+          evalBadgeEl.className = "badge bg-green text-white fs-3 px-3 py-1 fw-bold";
+        } else {
+          evalBadgeEl.textContent = "EVALUATION: CLOSED";
+          evalBadgeEl.className = "badge bg-secondary text-white fs-3 px-3 py-1 fw-bold";
+        }
+      }
+
+      if (statusLineEl) {
+        if (data.status === "Time In") {
+          statusLineEl.textContent = "Time In is open \u00B7 Connect to Wi-Fi and scan QR to record attendance";
+        } else if (data.status === "Time Out") {
+          statusLineEl.textContent = "Time Out is open \u00B7 Present your pass at the exit scanner & complete the Seminar Evaluation Form";
+        } else {
+          statusLineEl.textContent = "Attendance is currently closed";
+        }
+      }
+
+      if (annRow && annText) {
+        if (data.proj_announcement) {
+          annText.textContent = data.proj_announcement;
+          annRow.classList.remove("d-none");
+        } else {
+          annRow.classList.add("d-none");
+        }
+      }
+
+      if (colWifi) {
+        if (data.proj_show_wifi_qr) colWifi.classList.remove("d-none");
+        else colWifi.classList.add("d-none");
+      }
+
+      if (colForm) {
+        if (data.proj_show_form_qr) colForm.classList.remove("d-none");
+        else colForm.classList.add("d-none");
+      }
+
+      if (bothHidden) {
+        if (!data.proj_show_wifi_qr && !data.proj_show_form_qr) bothHidden.classList.remove("d-none");
+        else bothHidden.classList.add("d-none");
+      }
+
+      if (wifiSsidLabel && data.wifi_ssid) wifiSsidLabel.textContent = data.wifi_ssid;
+      if (wifiPassLabel) {
+        if (data.wifi_password) {
+          wifiPassLabel.textContent = "Password: ";
+          const span = document.createElement("span");
+          span.className = "font-monospace text-warning fw-bold";
+          span.textContent = data.wifi_password;
+          wifiPassLabel.appendChild(span);
+        } else {
+          wifiPassLabel.textContent = "Open Network (No Password)";
+        }
+      }
+      const curWifiSig = `${data.wifi_ssid || 'Event_Attendance'}|${data.wifi_password || ''}`;
+      if (curWifiSig !== lastWifiSig) {
+        lastWifiSig = curWifiSig;
+        if (wifiQrImage) wifiQrImage.src = "/api/qr/wifi?t=" + Date.now();
+      }
+
+      const curFormUrl = data.kiosk_url || data.base_url;
+      if (formUrlLabel) formUrlLabel.textContent = curFormUrl;
+      if (curFormUrl !== lastFormUrl) {
+        lastFormUrl = curFormUrl;
+        if (formQrImage) formQrImage.src = "/api/qr?t=" + Date.now();
+      }
+
+    } catch(e) {}
+  }, 4000);
+});
+</script>
+{% endblock %}
