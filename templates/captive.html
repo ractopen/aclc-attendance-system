@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Open in Browser | {{ event_title }}{% endblock %}
+
+{% block content %}
+<header class="navbar navbar-expand-md bg-aclc-blue text-white shadow-sm">
+  <div class="container-xl py-2 d-flex align-items-center">
+    <img src="/static/img/aclc-logo.png" alt="ACLC College of Mandaue" width="36" height="36" class="rounded-circle me-2 border border-2 border-warning">
+    <div class="min-w-0">
+      <div class="text-warning fw-bold text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.04em;">{{ wifi_ssid }}</div>
+      <h3 class="mb-0 text-white fw-bold text-truncate">{{ event_title }}</h3>
+    </div>
+  </div>
+</header>
+
+<div class="page-body my-4">
+  <div class="container-xl" style="max-width: 520px;">
+    <div class="card shadow-sm border-0">
+      <div class="card-status-top bg-aclc-blue"></div>
+      <div class="card-body p-4 text-center">
+        <div class="mb-3 d-inline-flex align-items-center justify-content-center rounded-circle bg-light border" style="width: 56px; height: 56px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0A3981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        </div>
+        <h2 class="text-aclc-blue fw-bold mb-2">Open in Chrome or Safari</h2>
+        <p class="text-muted small mb-3">
+          This Wi-Fi sign-in popup automatically closes and deletes saved QR passes when you leave it.
+          Open the link below in your phone's main browser so your Attendance Pass stays saved.
+        </p>
+
+        <div class="input-group mb-3">
+          <input type="text" id="kioskUrlInput" class="form-control font-monospace text-center fw-bold" value="{{ kiosk_url }}" readonly onclick="this.select();">
+          <button type="button" id="btnCopyKioskUrl" class="btn btn-aclc fw-bold px-3">Copy Link</button>
+        </div>
+        <div id="copyStatusMsg" class="small text-success fw-bold mb-3 d-none">Link copied. Paste it into Chrome or Safari.</div>
+
+        <div class="d-grid gap-2 mb-3">
+          <a id="btnOpenChromeIntent" href="{{ kiosk_url }}" class="btn btn-gold fw-bold py-2">
+            Open in Browser
+          </a>
+        </div>
+
+        <div class="border-top pt-3">
+          <a href="/" class="text-muted small text-decoration-underline">
+            Continue in this window anyway
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  var input = document.getElementById("kioskUrlInput");
+  var btnCopy = document.getElementById("btnCopyKioskUrl");
+  var msg = document.getElementById("copyStatusMsg");
+  var btnIntent = document.getElementById("btnOpenChromeIntent");
+
+  if (btnIntent && /Android/i.test(navigator.userAgent || "")) {
+    try {
+      var u = new URL(input.value);
+      btnIntent.href = "intent://" + u.host + u.pathname + u.search + "#Intent;scheme=" + u.protocol.replace(":", "") + ";package=com.android.chrome;end";
+    } catch (e) {}
+  }
+
+  if (btnCopy && input) {
+    btnCopy.addEventListener("click", function() {
+      input.select();
+      input.setSelectionRange(0, 99999);
+      var done = function() {
+        if (msg) msg.classList.remove("d-none");
+        btnCopy.textContent = "Copied";
+        setTimeout(function() { btnCopy.textContent = "Copy Link"; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(input.value).then(done).catch(function() {
+          try { document.execCommand("copy"); } catch (e) {}
+          done();
+        });
+      } else {
+        try { document.execCommand("copy"); } catch (e) {}
+        done();
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

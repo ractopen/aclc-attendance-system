@@ -164,48 +164,73 @@
 {% endblock %}
 
 {% block content %}
-<!-- Top Header (HIV Awareness Seminar & Evaluation Theme) -->
+<!-- Top Header -->
 <header class="navbar bg-hiv-header d-print-none shadow-sm border-bottom border-aclc-gold">
   <div class="container-xl py-2 d-flex align-items-center justify-content-between flex-nowrap gap-2">
     <div class="d-flex align-items-center min-w-0">
-      <img src="/static/img/aclc-logo.png" alt="ACLC College of Mandaue" width="40" height="40" class="rounded-circle me-2 me-md-3 flex-shrink-0 border border-2 border-warning">
+      <img src="/static/img/aclc-logo.png" alt="ACLC College of Mandaue" width="38" height="38" class="rounded-circle me-2 me-md-3 flex-shrink-0 border border-2 border-warning">
       <div class="min-w-0">
-        <div class="d-none d-sm-flex align-items-center gap-2 mb-1">
-          <span class="badge bg-warning text-dark fw-bold text-uppercase" style="font-size: 0.7rem;">SEMINAR EVALUATION FORM</span>
-          <span class="badge bg-hiv-crimson text-white fw-bold text-uppercase" style="font-size: 0.7rem;">Topic: HIV Awareness</span>
+        <div class="d-none d-sm-flex align-items-center gap-2">
+          <span class="text-warning fw-bold text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.04em;">HIV Awareness Seminar &middot; Attendance &amp; Evaluation</span>
         </div>
         <h3 class="mb-0 text-white fw-bold text-truncate" id="kioskEventTitle">{{ event_title }}</h3>
       </div>
     </div>
-    <div class="ms-auto flex-shrink-0">
-      <button type="button" id="btnTogglePasses" class="btn btn-warning btn-sm fw-bold text-dark">
-        My Passes (<span id="navPassCount">0</span>)
+    <div class="ms-auto flex-shrink-0 d-flex align-items-center gap-2">
+      <button type="button" id="btnThemeToggle" class="btn btn-outline-light btn-sm fw-bold rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 32px; height: 32px; padding: 0;" title="Switch to Dark Mode" aria-label="Toggle Light or Dark Mode">
+        <svg id="themeIconMoon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <svg id="themeIconSun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="d-none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+      </button>
+      <button type="button" id="btnHowItWorks" class="btn btn-outline-light btn-sm fw-bold rounded-circle" style="width: 32px; height: 32px; padding: 0; line-height: 1;" title="How it works" aria-label="How it works">
+        ?
       </button>
     </div>
   </div>
 </header>
 
-<div class="page-body my-4">
+<div class="page-body my-3 my-md-4">
   <div class="container-xl student-main-container">
 
-    <!-- Active Session & Criteria Banner -->
+    <!-- Real-time Disconnect Alert Banner -->
+    <div id="offlineAlertBanner" class="alert alert-danger shadow-sm mb-3 d-none" role="alert">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <div class="fw-bold text-danger">Connection Lost</div>
+          <small class="text-dark d-block">
+            You are disconnected from the event Wi-Fi (<strong>{{ wifi_ssid }}</strong>). Please reconnect to submit attendance or evaluation.
+          </small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-sm btn-outline-danger fw-bold" onclick="retryKioskConnection()">
+            Retry
+          </button>
+          <button type="button" class="btn btn-sm btn-hiv fw-bold" data-bs-toggle="modal" data-bs-target="#wifiQrModal">
+            Connect Wi-Fi
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compact Single-Line Session & Status Strip -->
     <div class="card mb-3 border-0 shadow-sm">
       <div class="card-status-top bg-hiv-crimson"></div>
-      <div class="card-body py-3 px-3">
-        <div>
-          <span class="text-hiv-crimson small text-uppercase fw-bold">HIV Awareness Seminar &middot; Attendance &amp; Evaluation</span>
-          <div class="fw-bold text-dark fs-3" id="activeSessionText">{{ session }} Session</div>
-          <div class="text-muted small">
-            Certificate requires <strong class="text-aclc-blue min-dur-text">{{ min_duration_label }}</strong> attendance + <strong class="text-hiv-crimson">Seminar Evaluation Form</strong>
-          </div>
-        </div>
-        <div class="session-status-row">
-          <span class="badge {% if status == 'Time Out' %}bg-orange text-white{% elif status == 'Closed' %}bg-secondary text-white{% else %}bg-green text-white{% endif %} px-3 py-2 fs-5 fw-bold" id="activeStatusBadge">
+      <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <span class="fw-bold text-dark" id="activeSessionText">{{ session }} Session</span>
+          <span class="badge {% if status == 'Time Out' %}bg-orange text-white{% elif status == 'Closed' %}bg-secondary text-white{% else %}bg-green text-white{% endif %} px-2 py-1 fw-bold" id="activeStatusBadge">
             {{ status }}
           </span>
-          <span class="badge {% if eval_open %}bg-hiv-crimson text-white{% else %}bg-secondary-lt text-muted{% endif %} px-3 py-2 fs-5 fw-bold" id="activeEvalStateBadge">
-            {% if eval_open %}Evaluation Open{% else %}Evaluation Closed{% endif %}
+          <span class="badge bg-hiv-crimson text-white px-2 py-1 fw-bold {% if not eval_open %}d-none{% endif %}" id="activeEvalStateBadge">
+            Evaluation Open
           </span>
+        </div>
+        <div class="d-flex align-items-center gap-2 ms-auto">
+          <span class="badge bg-green-lt text-green px-2 py-1 fw-bold" id="kioskNetworkBadge">
+            Connected
+          </span>
+          <button type="button" id="btnManualRefreshStatus" class="btn btn-outline-secondary btn-sm py-0 px-2 fw-bold" style="font-size: 0.72rem;" title="Refresh status &amp; evaluation">
+            Refresh
+          </button>
         </div>
       </div>
     </div>
@@ -215,20 +240,30 @@
       <div><strong>Notice:</strong> <span id="announcementText">{{ kiosk_announcement }}</span></div>
     </div>
 
-    <!-- State: Time Out View (Direct to My Passes) -->
-    <div id="timeOutActiveNotice" class="card p-4 text-center shadow-sm mb-4 {% if status != 'Time Out' %}d-none{% endif %}">
+    <!-- Unified Workspace Switcher (Time In vs My Passes) -->
+    <div id="studentViewTabs" class="btn-group w-100 mb-3 shadow-sm {% if status != 'Time In' %}d-none{% endif %}" role="group" aria-label="Student view switcher">
+      <button type="button" id="tabBtnTimeIn" class="btn btn-aclc fw-bold py-2">
+        Time In Form
+      </button>
+      <button type="button" id="tabBtnMyPasses" class="btn btn-outline-primary bg-white fw-bold py-2">
+        My Passes (<span id="tabPassCount">0</span>)
+      </button>
+    </div>
+
+    <!-- State: Time Out View -->
+    <div id="timeOutActiveNotice" class="card p-3 p-md-4 text-center shadow-sm mb-3 {% if status != 'Time Out' %}d-none{% endif %}">
       <h3 class="text-aclc-blue mb-1">Time Out is Open</h3>
-      <p class="text-muted mb-0">Present your QR pass below at the exit scanner and ensure your Seminar Evaluation Form is submitted.</p>
+      <p class="text-muted small mb-0">Present your QR pass below at the exit scanner and ensure your Seminar Evaluation Form is submitted.</p>
     </div>
 
     <!-- State: Closed View -->
-    <div id="closedNotice" class="card p-4 text-center shadow-sm mb-4 {% if status != 'Closed' %}d-none{% endif %}">
+    <div id="closedNotice" class="card p-3 p-md-4 text-center shadow-sm mb-3 {% if status != 'Closed' %}d-none{% endif %}">
       <h3 class="text-dark mb-1">Attendance is Closed</h3>
-      <p class="text-muted mb-0">Attendance recording is currently paused or closed. You can still view your saved passes and take the evaluation below when opened.</p>
+      <p class="text-muted small mb-0">Attendance recording is currently paused. You can still view your saved passes and take the evaluation below when opened.</p>
     </div>
 
     <!-- Pass Generated Notification (Shown right after Time In) -->
-    <div id="timeInSuccessAlert" class="alert alert-success d-none py-3 px-4 mb-4 text-center shadow-sm">
+    <div id="timeInSuccessAlert" class="alert alert-success d-none py-3 px-4 mb-3 text-center shadow-sm">
       <h3 class="text-success fw-bold mb-1">Time In Recorded</h3>
       <p class="mb-2 text-dark small" id="timeInSuccessMsg">Your attendance has been recorded. Keep your pass below for your Seminar Evaluation and Time Out.</p>
       <button type="button" id="btnRegisterAnother" class="btn btn-outline-success btn-sm fw-bold">
@@ -236,34 +271,38 @@
       </button>
     </div>
 
-    <!-- My Passes Section (Always Visible & Collapsible Multi-Pass List) -->
-    <div id="myPassesSection" class="card shadow-sm border-0 mb-4">
-      <div id="myPassesHeaderToggle" class="card-header bg-white d-flex justify-content-between align-items-center py-3 px-4 passes-header-toggle">
-        <div>
-          <h3 class="text-aclc-blue fw-bold mb-0">My Passes &amp; Seminar Evaluation</h3>
-          <small class="text-muted">Each pass has its own evaluation form &middot; Classmates can share one phone</small>
-        </div>
+    <!-- My Passes Section -->
+    <div id="myPassesSection" class="card shadow-sm border-0 mb-4 {% if status == 'Time In' %}d-none{% endif %}">
+      <div id="myPassesHeaderToggle" class="card-header bg-white d-flex justify-content-between align-items-center py-3 px-3 px-md-4">
         <div class="d-flex align-items-center gap-2">
-          <span class="badge bg-primary text-white fs-4 px-3 py-1" id="passesCountBadge">0 Passes</span>
-          <button type="button" id="btnCollapsePasses" class="btn btn-outline-secondary btn-sm fw-bold">
-            Hide
-          </button>
+          <h3 class="text-aclc-blue fw-bold mb-0">My Passes</h3>
+          <span class="badge bg-primary text-white px-2 py-1" id="passesCountBadge">0 Passes</span>
         </div>
+        <button type="button" id="btnToggleFriendForm" class="btn btn-outline-primary btn-sm fw-bold">
+          Recover / Add Pass
+        </button>
       </div>
 
       <div id="myPassesCollapseBody" class="card-body p-3 p-md-4 border-top">
-        <!-- Add Friend's Pass Card -->
-        <div class="card bg-light border p-3 mb-4">
-          <label class="form-label fw-bold text-aclc-blue mb-1">Add a Classmate's Pass (Shared Phone Support)</label>
-          <small class="text-muted d-block mb-2">If a classmate registered on another device or has no battery, enter their Student ID so they can show their QR pass or take their Seminar Evaluation on this phone:</small>
-          <div class="input-group">
-            <input type="text" id="inputFriendId" class="form-control text-uppercase font-monospace" placeholder="e.g. 2024-01234" maxlength="50" autocomplete="off">
-            <button type="button" id="btnAddFriendPass" class="btn btn-aclc fw-bold px-3">Add Pass</button>
+        <!-- Compact Add Classmate's / Recover Pass Bar (Collapsed by default) -->
+        <div id="friendPassBar" class="bg-light border rounded p-2 p-md-3 mb-3 d-none">
+          <small class="text-muted d-block mb-2">Enter your Student ID (or Email) and Last Name to recover or load a pass:</small>
+          <div class="row g-2">
+            <div class="col-sm-5 col-12">
+              <input type="text" id="inputFriendId" class="form-control form-control-sm" placeholder="Student ID or Email" maxlength="100" autocomplete="off">
+            </div>
+            <div class="col-sm-4 col-12">
+              <input type="text" id="inputFriendLastName" class="form-control form-control-sm" placeholder="Last Name" maxlength="100" autocomplete="off">
+            </div>
+            <div class="col-sm-3 col-12 d-grid">
+              <button type="button" id="btnAddFriendPass" class="btn btn-aclc btn-sm fw-bold">Load Pass</button>
+            </div>
           </div>
           <div id="friendPassAlert" class="small mt-2 d-none fw-bold"></div>
+          <div id="friendPassMatches" class="list-group list-group-flush mt-2 border rounded d-none"></div>
         </div>
 
-        <!-- Passes Container: 1 column for 1-2 passes, 2xN (2 columns) for 3+ passes -->
+        <!-- Passes Container -->
         <div id="passesListContainer" class="row g-3">
           <!-- Rendered dynamically -->
         </div>
@@ -275,9 +314,8 @@
       <div class="card-status-top bg-aclc-blue"></div>
       <div class="card-body p-4 p-md-5">
         <div class="text-center mb-4">
-          <span class="badge badge-hiv px-3 py-1 mb-2">HIV AWARENESS SEMINAR</span>
           <h2 class="card-title text-center text-aclc-blue fs-1 mb-1">Attendance Time In</h2>
-          <p class="text-center text-muted small mb-0">Register to generate your Attendance Pass &amp; Evaluation Access</p>
+          <p class="text-center text-muted small mb-0">Register to get your Attendance Pass &amp; Evaluation Access</p>
         </div>
 
         <form id="attendanceForm" autocomplete="off">
@@ -286,32 +324,26 @@
           <div class="mb-3">
             <label class="form-label required">Academic Category</label>
             <div class="row g-2">
-              <div class="col-md-4 col-12">
+              <div class="col-4">
                 <input type="radio" class="btn-check" name="level" id="levelSHS" value="SHS" checked>
-                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelSHS">Senior High (SHS)</label>
+                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelSHS">SHS</label>
               </div>
-              <div class="col-md-4 col-12">
+              <div class="col-4">
                 <input type="radio" class="btn-check" name="level" id="levelCollege" value="COLLEGE">
-                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelCollege">College Level</label>
+                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelCollege">College</label>
               </div>
-              <div class="col-md-4 col-12">
+              <div class="col-4">
                 <input type="radio" class="btn-check" name="level" id="levelGuest" value="NON_STUDENT">
-                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelGuest">Guest / Other</label>
+                <label class="btn btn-outline-primary w-100 py-2 fw-bold" for="levelGuest">Guest</label>
               </div>
             </div>
-          </div>
-
-          <!-- Student ID -->
-          <div class="mb-3">
-            <label class="form-label required" id="lblId">Student ID Number</label>
-            <input type="text" class="form-control form-control-lg text-uppercase font-monospace" id="student_id" name="student_id" placeholder="e.g. 2024-01234" maxlength="50" required autofocus>
           </div>
 
           <!-- Names -->
           <div class="row g-3 mb-2">
             <div class="col-md-6 col-12">
               <label class="form-label required">Last Name</label>
-              <input type="text" class="form-control" id="last_name" name="last_name" placeholder="e.g. Dela Cruz" maxlength="100" required>
+              <input type="text" class="form-control" id="last_name" name="last_name" placeholder="e.g. Dela Cruz" maxlength="100" required autofocus>
             </div>
             <div class="col-md-6 col-12">
               <label class="form-label required">First Name</label>
@@ -324,8 +356,8 @@
             <input type="text" class="form-control" id="middle_name" name="middle_name" placeholder="Leave blank if none" maxlength="100">
           </div>
 
-          <!-- Sex & Age (Clamped 10 to 120) -->
-          <div class="row g-3 mb-2">
+          <!-- Sex & Age -->
+          <div class="row g-3 mb-3">
             <div class="col-md-7 col-12">
               <label class="form-label required">Sex</label>
               <select class="form-select" id="sex_select" name="sex_select" required>
@@ -337,27 +369,107 @@
             </div>
             <div class="col-md-5 col-12">
               <label class="form-label required">Age</label>
-              <div class="input-group">
-                <button type="button" class="btn btn-outline-secondary px-3 fw-bold fs-3" id="btnAgeMinus">-</button>
-                <input type="text" inputmode="numeric" pattern="[0-9]*" class="form-control text-center fw-bold px-1" id="age" name="age" placeholder="Age" maxlength="3" autocomplete="off" required
-                  oninput="this.value=this.value.replace(/[^0-9]/g,''); if(this.value.length>3) this.value=this.value.slice(0,3); if(parseInt(this.value)>120) this.value='120';"
-                  onblur="if(this.value!=='' && parseInt(this.value)<10) this.value='10';">
-                <button type="button" class="btn btn-outline-secondary px-3 fw-bold fs-3" id="btnAgePlus">+</button>
-              </div>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" class="form-control" id="age" name="age" placeholder="e.g. 18" maxlength="3" autocomplete="off" required
+                oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,3);">
             </div>
           </div>
 
-          <!-- Section -->
+          <!-- Section (Auto-detects Grade/Strand or Year/Course) -->
           <div class="mb-3">
             <label class="form-label required" id="lblSection">Section</label>
-            <input type="text" class="form-control text-uppercase" id="section" name="section" placeholder="e.g. 11-ICT-A, BSCS-3A" maxlength="50" required>
+            <input type="text" class="form-control text-uppercase" id="section" name="section" list="knownSectionsList" placeholder="e.g. 11-ICT-A, CS31A, BSCS-3A" maxlength="50" required>
+            <div id="sectionDetectedWrap" class="d-flex align-items-center justify-content-between mt-1 small">
+              <span class="text-muted" id="sectionDetectedChip">Grade/Strand or Year/Course is auto-detected from your section.</span>
+              <button type="button" id="btnToggleAcademicDetails" class="btn btn-link btn-sm p-0 text-aclc-blue fw-bold text-decoration-none">Edit</button>
+            </div>
+            <datalist id="knownSectionsList">
+              <option value="11-STEM-A">
+              <option value="11-ICT-A">
+              <option value="11-ABM-A">
+              <option value="11-HUMSS-A">
+              <option value="11-GAS-A">
+              <option value="12-STEM-A">
+              <option value="12-ICT-A">
+              <option value="12-ABM-A">
+              <option value="12-HUMSS-A">
+              <option value="12-GAS-A">
+              <option value="CS11A">
+              <option value="CS21A">
+              <option value="CS31A">
+              <option value="CS41A">
+              <option value="IT11A">
+              <option value="IT21A">
+              <option value="IT31A">
+              <option value="IT41A">
+              <option value="BA11A">
+              <option value="HM11A">
+              <option value="ACT11A">
+            </datalist>
+          </div>
+
+          <!-- SHS Grade & Strand (Hidden by default; shown when Edit is clicked) -->
+          <div id="shsDetailsRow" class="row g-3 mb-3 d-none">
+            <div class="col-md-5 col-12">
+              <label class="form-label">Grade Level</label>
+              <select class="form-select" id="shs_grade" name="shs_grade">
+                <option value="">Auto from section</option>
+                <option value="Grade 11">Grade 11</option>
+                <option value="Grade 12">Grade 12</option>
+              </select>
+            </div>
+            <div class="col-md-7 col-12">
+              <label class="form-label">Strand</label>
+              <select class="form-select" id="strand" name="strand">
+                <option value="">Auto from section</option>
+                <option value="STEM">STEM</option>
+                <option value="TVL-ICT">TVL-ICT</option>
+                <option value="TVL-HE">TVL-HE</option>
+                <option value="ABM">ABM</option>
+                <option value="HUMSS">HUMSS</option>
+                <option value="GAS">GAS</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- College Year & Course (Hidden by default; shown when Edit is clicked) -->
+          <div id="collegeDetailsRow" class="row g-3 mb-3 d-none">
+            <div class="col-md-5 col-12">
+              <label class="form-label">Year Level</label>
+              <select class="form-select" id="college_year" name="college_year">
+                <option value="">Auto from section</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+              </select>
+            </div>
+            <div class="col-md-7 col-12">
+              <label class="form-label">Course</label>
+              <select class="form-select" id="course" name="course">
+                <option value="">Auto from section</option>
+                <option value="BSCS">BSCS</option>
+                <option value="BSIT">BSIT</option>
+                <option value="BSBA">BSBA</option>
+                <option value="BSHM">BSHM</option>
+                <option value="ACT">ACT</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
           </div>
 
           <!-- Email -->
           <div class="mb-3">
             <label class="form-label required">Email Address</label>
             <input type="email" class="form-control" id="email" name="email" placeholder="e.g. name@gmail.com" maxlength="120" required>
-            <small class="text-muted">Certificate will be sent to this email once attendance duration (<span class="min-dur-text">{{ min_duration_label }}</span>) and evaluation are complete.</small>
+            <small class="text-muted">Your certificate will be emailed here once duration (<span class="min-dur-text">{{ min_duration_label }}</span>) and evaluation are complete.</small>
+          </div>
+
+          <!-- Optional Student ID / USN (Single clean input) -->
+          <div class="mb-3">
+            <input type="hidden" id="id_type" name="id_type" value="Student ID Number">
+            <label class="form-label mb-1" id="lblId">Student ID Number / USN <span class="text-muted fw-normal">(Optional)</span></label>
+            <input type="text" class="form-control text-uppercase font-monospace" id="student_id" name="student_id" placeholder="e.g. C24-01234 (leave blank if none)" maxlength="50">
+            <small class="text-muted d-block mt-1">No ID yet? Leave blank &mdash; a temporary Pass ID will be generated.</small>
           </div>
 
           <!-- Data Privacy & Terms Notice -->
@@ -448,53 +560,13 @@
           <div class="eval-section-banner">
             <h4 class="fw-bold text-hiv-crimson mb-0">II. Learning Outcomes</h4>
           </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-bold text-dark required" for="eval_q2_1">
-              1. What important information did you learn from the HIV Awareness Seminar?
-            </label>
-            <textarea class="form-control eval-input eval-auto-expand" id="eval_q2_1" name="q2_1" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-bold text-dark required" for="eval_q2_2">
-              2. What misconception about HIV was clarified during the seminar?
-            </label>
-            <textarea class="form-control eval-input eval-auto-expand" id="eval_q2_2" name="q2_2" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
-          </div>
-
-          <div class="mb-4">
-            <label class="form-label fw-bold text-dark required" for="eval_q2_3">
-              3. How will you apply the knowledge you gained from the seminar in your daily life?
-            </label>
-            <textarea class="form-control eval-input eval-auto-expand" id="eval_q2_3" name="q2_3" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
-          </div>
+          <div id="evalPart2Container"></div>
 
           <!-- PART III: OVERALL ASSESSMENT -->
           <div class="eval-section-banner">
             <h4 class="fw-bold text-hiv-crimson mb-0">III. Overall Assessment</h4>
           </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-bold text-dark required" for="eval_q3_1">
-              1. What part of the seminar did you find most helpful?
-            </label>
-            <textarea class="form-control eval-input eval-auto-expand" id="eval_q3_1" name="q3_1" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-bold text-dark required" for="eval_q3_2">
-              2. What topics related to HIV awareness would you like to learn more about?
-            </label>
-            <textarea class="form-control eval-input eval-auto-expand" id="eval_q3_2" name="q3_2" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-bold text-dark required" for="eval_q3_3">
-              3. What suggestions do you have to improve future seminars?
-            </label>
-            <textarea class="form-control eval-input eval-auto-expand" id="eval_q3_3" name="q3_3" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
-          </div>
+          <div id="evalPart3Container"></div>
 
           <div class="text-center text-muted small fw-bold my-3">
             Thank you for your participation and honest feedback!
@@ -550,6 +622,37 @@
   </div>
 </div>
 
+<!-- Modal: How It Works (?) -->
+<div class="modal fade" id="modalHowItWorks" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-aclc-blue text-white">
+        <h5 class="modal-title fw-bold">How Attendance &amp; Evaluation Works</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="d-flex flex-column gap-3">
+          <div class="p-3 bg-light rounded border">
+            <div class="fw-bold text-aclc-blue mb-1">1. Time In (Add Your Info)</div>
+            <div class="small text-dark">Fill out the <strong>Time In Form</strong> with your details (ID number is optional) to generate your QR Pass.</div>
+          </div>
+          <div class="p-3 bg-light rounded border">
+            <div class="fw-bold text-hiv-crimson mb-1">2. Wait for Evaluation to Open</div>
+            <div class="small text-dark">When you see <strong>Evaluation Form Open</strong>, go to <strong>My Passes</strong> and tap <strong>Take Seminar Evaluation</strong> on your pass.</div>
+          </div>
+          <div class="p-3 bg-light rounded border">
+            <div class="fw-bold text-success mb-1">3. Time Out</div>
+            <div class="small text-dark">When <strong>Time Out</strong> is active, open <strong>My Passes</strong> and show your QR code at the exit scanner.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-aclc fw-bold w-100" data-bs-dismiss="modal">Got It</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ======================================================================= -->
 <!-- MODAL 3: DATA PRIVACY & SEMINAR TERMS NOTICE (RA 10173)                 -->
 <!-- ======================================================================= -->
@@ -574,6 +677,40 @@
     </div>
   </div>
 </div>
+
+<!-- Modal: Wi-Fi Quick Connect -->
+<div class="modal modal-blur fade" id="wifiQrModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+    <div class="modal-content text-center">
+      <div class="modal-header bg-hiv-header text-white">
+        <h5 class="modal-title fw-bold">Connect to Seminar Wi-Fi</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <p class="text-muted small mb-3">
+          Scan this QR code with your camera or Wi-Fi settings to connect directly:
+        </p>
+        <div class="border p-2 rounded d-inline-block bg-white shadow-sm mb-3">
+          <img src="/api/qr/wifi" alt="Wi-Fi QR Code" width="200" height="200" class="img-fluid">
+        </div>
+        <div class="fw-bold text-dark fs-3 mb-1">{{ wifi_ssid }}</div>
+        <div class="text-muted small mb-3">
+          {% if wifi_password %}
+            Password: <span class="font-monospace fw-bold text-dark">{{ wifi_password }}</span>
+          {% else %}
+            Open Network &middot; No Password Required
+          {% endif %}
+        </div>
+        <div class="alert alert-warning py-2 px-3 small text-start mb-0">
+          <strong>Tip:</strong> If your phone asks <em>"Network has no internet — Stay connected?"</em>, tap <strong>Stay Connected / Keep Wi-Fi</strong>.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary w-100 fw-bold" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -594,29 +731,22 @@ document.addEventListener("DOMContentLoaded", function() {
   }
   const clientSessionId = getClientSessionId();
 
-  const PART1_STATEMENTS = [
-    "1. The objectives of the HIV Awareness Seminar were clearly presented.",
-    "2. The speaker demonstrated sufficient knowledge of HIV and related topics.",
-    "3. The information presented was accurate, relevant, and easy to understand.",
-    "4. The seminar provided a clear understanding of HIV, its transmission, and prevention.",
-    "5. The discussion addressed common misconceptions and stigma surrounding HIV.",
-    "6. The speaker encouraged active participation and interaction.",
-    "7. The seminar increased my awareness of HIV prevention and testing.",
-    "8. The seminar helped me understand the importance of respect and non-discrimination toward people living with HIV.",
-    "9. The materials and presentations supported my understanding of the topic.",
-    "10. Overall, the seminar was informative and beneficial."
-  ];
+  let evalQuizSchema = {{ eval_quiz_schema | tojson }};
+  let currentQuizVersion = {{ eval_quiz_version | default(1) }};
 
-  // Build Part I rating rows inside the evaluation modal
-  const evalPart1Container = document.getElementById("evalPart1Container");
-  if (evalPart1Container) {
-    evalPart1Container.innerHTML = PART1_STATEMENTS.map((stmt, idx) => {
-      const qNum = idx + 1;
-      const fieldName = `q1_${qNum}`;
+  function escapeEvalHtml(str) {
+    return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function renderQuestionHtml(item) {
+    if (!item || item.enabled === false) return "";
+    const qid = item.id;
+    const text = escapeEvalHtml(item.text);
+    if (item.type === "rating") {
       const optionsHtml = [5, 4, 3, 2, 1].map(score => `
         <div class="eval-rating-option">
-          <input type="radio" class="eval-input" name="${fieldName}" id="opt_${fieldName}_${score}" value="${score}">
-          <label for="opt_${fieldName}_${score}">
+          <input type="radio" class="eval-input" name="${qid}" id="opt_${qid}_${score}" value="${score}">
+          <label for="opt_${qid}_${score}">
             <span class="chk-box"></span>
             <span>${score}</span>
           </label>
@@ -624,14 +754,34 @@ document.addEventListener("DOMContentLoaded", function() {
       `).join("");
       return `
         <div class="eval-criteria-row">
-          <div class="fw-bold text-dark mb-2">${stmt}</div>
+          <div class="fw-bold text-dark mb-2">${text}</div>
           <div class="eval-rating-group">
             ${optionsHtml}
           </div>
         </div>
       `;
-    }).join("");
+    }
+    return `
+      <div class="mb-3">
+        <label class="form-label fw-bold text-dark required" for="eval_${qid}">
+          ${text}
+        </label>
+        <textarea class="form-control eval-input eval-auto-expand" id="eval_${qid}" name="${qid}" rows="2" maxlength="1500" placeholder="Type your response here..." required></textarea>
+      </div>
+    `;
   }
+
+  function renderEvaluationQuestions(schema) {
+    if (!schema) return;
+    const p1 = document.getElementById("evalPart1Container");
+    const p2 = document.getElementById("evalPart2Container");
+    const p3 = document.getElementById("evalPart3Container");
+    if (p1) p1.innerHTML = (schema.part1 || []).map(renderQuestionHtml).join("") || '<div class="text-muted small py-2">No rating questions active.</div>';
+    if (p2) p2.innerHTML = (schema.part2 || []).map(renderQuestionHtml).join("");
+    if (p3) p3.innerHTML = (schema.part3 || []).map(renderQuestionHtml).join("");
+  }
+
+  renderEvaluationQuestions(evalQuizSchema);
 
   let isEvalOpen = {{ 'true' if eval_open else 'false' }};
   let currentMinDurLabel = "{{ min_duration_label }}";
@@ -645,53 +795,74 @@ document.addEventListener("DOMContentLoaded", function() {
   const timeInSuccessMsg = document.getElementById("timeInSuccessMsg");
 
   const myPassesSection = document.getElementById("myPassesSection");
-  const myPassesHeaderToggle = document.getElementById("myPassesHeaderToggle");
   const myPassesCollapseBody = document.getElementById("myPassesCollapseBody");
-  const btnCollapsePasses = document.getElementById("btnCollapsePasses");
   const passesListContainer = document.getElementById("passesListContainer");
   const passesCountBadge = document.getElementById("passesCountBadge");
-  const btnTogglePasses = document.getElementById("btnTogglePasses");
-  const navPassCount = document.getElementById("navPassCount");
+  const tabPassCount = document.getElementById("tabPassCount");
+  const studentViewTabs = document.getElementById("studentViewTabs");
+  const tabBtnTimeIn = document.getElementById("tabBtnTimeIn");
+  const tabBtnMyPasses = document.getElementById("tabBtnMyPasses");
+  const btnToggleFriendForm = document.getElementById("btnToggleFriendForm");
+  const friendPassBar = document.getElementById("friendPassBar");
+
+  let activeStudentTab = "timein";
 
   function setPassesExpanded(expanded) {
-    if (!myPassesCollapseBody || !btnCollapsePasses) return;
+    if (!myPassesCollapseBody) return;
     if (expanded) {
       myPassesCollapseBody.classList.remove("d-none");
-      btnCollapsePasses.textContent = "Hide";
     } else {
       myPassesCollapseBody.classList.add("d-none");
-      btnCollapsePasses.textContent = "Show";
     }
   }
 
-  function togglePassesCollapsed() {
-    if (!myPassesCollapseBody) return;
-    const isHidden = myPassesCollapseBody.classList.contains("d-none");
-    setPassesExpanded(isHidden);
+  function setActiveStudentTab(tab) {
+    activeStudentTab = tab === "passes" ? "passes" : "timein";
+    if (tabBtnTimeIn && tabBtnMyPasses) {
+      if (activeStudentTab === "passes") {
+        tabBtnTimeIn.className = "btn btn-outline-primary bg-white fw-bold py-2";
+        tabBtnMyPasses.className = "btn btn-aclc fw-bold py-2";
+      } else {
+        tabBtnTimeIn.className = "btn btn-aclc fw-bold py-2";
+        tabBtnMyPasses.className = "btn btn-outline-primary bg-white fw-bold py-2";
+      }
+    }
+    if (myPassesSection && formCard) {
+      if (activeStudentTab === "passes") {
+        formCard.classList.add("d-none");
+        myPassesSection.classList.remove("d-none");
+        setPassesExpanded(true);
+      } else {
+        myPassesSection.classList.add("d-none");
+        formCard.classList.remove("d-none");
+      }
+    }
   }
 
-  if (myPassesHeaderToggle) {
-    myPassesHeaderToggle.addEventListener("click", function() {
-      togglePassesCollapsed();
+  if (tabBtnTimeIn) {
+    tabBtnTimeIn.addEventListener("click", function() {
+      if (timeInSuccessAlert) timeInSuccessAlert.classList.add("d-none");
+      setActiveStudentTab("timein");
+    });
+  }
+
+  if (tabBtnMyPasses) {
+    tabBtnMyPasses.addEventListener("click", function() {
+      setActiveStudentTab("passes");
+    });
+  }
+
+  if (btnToggleFriendForm && friendPassBar) {
+    btnToggleFriendForm.addEventListener("click", function() {
+      friendPassBar.classList.toggle("d-none");
+      if (!friendPassBar.classList.contains("d-none")) {
+        const inp = document.getElementById("inputFriendId");
+        if (inp) inp.focus();
+      }
     });
   }
 
   const ageInput = document.getElementById("age");
-  const btnAgeMinus = document.getElementById("btnAgeMinus");
-  const btnAgePlus = document.getElementById("btnAgePlus");
-
-  // Age Stepper Buttons
-  btnAgeMinus.addEventListener("click", function() {
-    let val = ageInput.value.trim() === "" ? 17 : parseInt(ageInput.value, 10);
-    if (isNaN(val)) val = 17;
-    ageInput.value = val > 10 ? val - 1 : 10;
-  });
-
-  btnAgePlus.addEventListener("click", function() {
-    let val = ageInput.value.trim() === "" ? 17 : parseInt(ageInput.value, 10);
-    if (isNaN(val)) val = 17;
-    ageInput.value = val < 120 ? val + 1 : 120;
-  });
 
   // Data Privacy Modal Trigger
   const linkPrivacyNotice = document.getElementById("linkPrivacyNotice");
@@ -710,25 +881,87 @@ document.addEventListener("DOMContentLoaded", function() {
   const lblSection = document.getElementById("lblSection");
   const sectionInput = document.getElementById("section");
   const studentIdInputEl = document.getElementById("student_id");
+  const idTypeSelectEl = document.getElementById("id_type");
+
+  function updateIdTypeUI() {
+    if (!lblId || !studentIdInputEl || !idTypeSelectEl) return;
+    const chosen = idTypeSelectEl.value || "Student ID Number";
+    lblId.innerHTML = `${chosen} <span class="text-muted fw-normal">(Optional)</span>`;
+    if (chosen === "USN") {
+      studentIdInputEl.placeholder = "e.g. 24001234567 (leave blank if none)";
+    } else if (chosen === "ID Number") {
+      studentIdInputEl.placeholder = "e.g. ID-001 or FACULTY-01 (leave blank if none)";
+    } else {
+      studentIdInputEl.placeholder = "e.g. C24-01234 (leave blank if none)";
+    }
+  }
+
+  const shsDetailsRow = document.getElementById("shsDetailsRow");
+  const collegeDetailsRow = document.getElementById("collegeDetailsRow");
+  const sectionDetectedWrap = document.getElementById("sectionDetectedWrap");
+  const sectionDetectedChip = document.getElementById("sectionDetectedChip");
+  const btnToggleAcademicDetails = document.getElementById("btnToggleAcademicDetails");
+  let academicDetailsExpanded = false;
+
+  function updateDetectedChip() {
+    if (!sectionDetectedChip) return;
+    if (radioGuest && radioGuest.checked) return;
+    if (radioCollege && radioCollege.checked) {
+      const yr = (document.getElementById("college_year") || {}).value || "";
+      const cr = (document.getElementById("course") || {}).value || "";
+      const parts = [yr, cr].filter(Boolean);
+      sectionDetectedChip.textContent = parts.length ? `Detected: ${parts.join(" · ")}` : "Year/Course will be auto-detected from your section.";
+    } else {
+      const gr = (document.getElementById("shs_grade") || {}).value || "";
+      const st = (document.getElementById("strand") || {}).value || "";
+      const parts = [gr, st].filter(Boolean);
+      sectionDetectedChip.textContent = parts.length ? `Detected: ${parts.join(" · ")}` : "Grade/Strand will be auto-detected from your section.";
+    }
+  }
 
   function updateCategoryLabels() {
-    if (!lblId || !lblSection || !sectionInput) return;
+    if (!lblSection || !sectionInput) return;
     if (radioGuest && radioGuest.checked) {
-      lblId.textContent = "ID / Control Number";
-      if (studentIdInputEl) studentIdInputEl.placeholder = "e.g. FACULTY-01 or GUEST-01";
+      if (idTypeSelectEl) idTypeSelectEl.value = "ID Number";
+      if (shsDetailsRow) shsDetailsRow.classList.add("d-none");
+      if (collegeDetailsRow) collegeDetailsRow.classList.add("d-none");
+      if (sectionDetectedWrap) sectionDetectedWrap.classList.add("d-none");
       lblSection.textContent = "Role / Designation";
       sectionInput.placeholder = "e.g. Faculty, Guest Speaker, Staff";
     } else if (radioCollege && radioCollege.checked) {
-      lblId.textContent = "Student ID Number";
-      if (studentIdInputEl) studentIdInputEl.placeholder = "e.g. 2024-01234";
+      if (idTypeSelectEl) idTypeSelectEl.value = "Student ID Number";
+      if (sectionDetectedWrap) sectionDetectedWrap.classList.remove("d-none");
+      if (shsDetailsRow) shsDetailsRow.classList.add("d-none");
+      if (collegeDetailsRow) collegeDetailsRow.classList.toggle("d-none", !academicDetailsExpanded);
       lblSection.textContent = "Section";
       sectionInput.placeholder = "e.g. BSCS-3A, BSIT-2B, CS31A";
     } else {
-      lblId.textContent = "Student ID Number";
-      if (studentIdInputEl) studentIdInputEl.placeholder = "e.g. 2024-01234";
+      if (idTypeSelectEl) idTypeSelectEl.value = "Student ID Number";
+      if (sectionDetectedWrap) sectionDetectedWrap.classList.remove("d-none");
+      if (shsDetailsRow) shsDetailsRow.classList.toggle("d-none", !academicDetailsExpanded);
+      if (collegeDetailsRow) collegeDetailsRow.classList.add("d-none");
       lblSection.textContent = "Section";
       sectionInput.placeholder = "e.g. 11-ICT-A, 12-STEM-B";
     }
+    updateIdTypeUI();
+    updateDetectedChip();
+  }
+
+  if (btnToggleAcademicDetails) {
+    btnToggleAcademicDetails.addEventListener("click", function() {
+      academicDetailsExpanded = !academicDetailsExpanded;
+      this.textContent = academicDetailsExpanded ? "Hide" : "Edit";
+      updateCategoryLabels();
+    });
+  }
+
+  ["shs_grade", "strand", "college_year", "course"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", updateDetectedChip);
+  });
+
+  if (idTypeSelectEl) {
+    idTypeSelectEl.addEventListener("change", updateIdTypeUI);
   }
 
   [radioSHS, radioCollege, radioGuest].forEach(r => {
@@ -738,18 +971,50 @@ document.addEventListener("DOMContentLoaded", function() {
   if (sectionInput) {
     sectionInput.addEventListener("input", function() {
       if (radioGuest && radioGuest.checked) return;
-      const val = this.value.toUpperCase();
+      const val = this.value.toUpperCase().trim();
+      const collegeYearEl = document.getElementById("college_year");
+      const courseEl = document.getElementById("course");
+      const shsGradeEl = document.getElementById("shs_grade");
+      const strandEl = document.getElementById("strand");
+
       if (/(?:^|\b)(?:BSCS|BSIT|BSBA|BSHM|ACT|CS\d|IT\d|BA\d|HM\d)/.test(val) || /\b(?:BSCS|BSIT|BSBA|BSHM|ACT)\b/.test(val)) {
         if (radioCollege && !radioCollege.checked) {
           radioCollege.checked = true;
           updateCategoryLabels();
+        }
+        if (courseEl) {
+          if (val.includes("BSCS") || /(?:^|\b)CS(?:\d|\b|-|_)/.test(val)) courseEl.value = "BSCS";
+          else if (val.includes("BSIT") || /(?:^|\b)IT(?:\d|\b|-|_)/.test(val)) courseEl.value = "BSIT";
+          else if (val.includes("BSBA") || /(?:^|\b)BA(?:\d|\b|-|_)/.test(val)) courseEl.value = "BSBA";
+          else if (val.includes("BSHM") || /(?:^|\b)HM(?:\d|\b|-|_)/.test(val)) courseEl.value = "BSHM";
+          else if (val.includes("ACT")) courseEl.value = "ACT";
+        }
+        if (collegeYearEl) {
+          const ym = val.match(/(?:BSCS|BSIT|BSBA|BSHM|ACT|CS|IT|BA|HM)[-_\s]*([1-4])/);
+          if (ym) {
+            const yrMap = { "1": "1st Year", "2": "2nd Year", "3": "3rd Year", "4": "4th Year" };
+            if (yrMap[ym[1]]) collegeYearEl.value = yrMap[ym[1]];
+          }
         }
       } else if (/(?:^|\b)(?:STEM|ABM|HUMSS|GAS|TVL|ICT|HE|11|12|G11|G12)\b/.test(val) || /^(?:11|12)[-_]/.test(val)) {
         if (radioSHS && !radioSHS.checked) {
           radioSHS.checked = true;
           updateCategoryLabels();
         }
+        if (shsGradeEl) {
+          if (/(?:^|\b|G|GRADE\s*)11(?:\b|-|_)/.test(val)) shsGradeEl.value = "Grade 11";
+          else if (/(?:^|\b|G|GRADE\s*)12(?:\b|-|_)/.test(val)) shsGradeEl.value = "Grade 12";
+        }
+        if (strandEl) {
+          if (val.includes("STEM")) strandEl.value = "STEM";
+          else if (val.includes("ICT") || val.includes("TVL")) strandEl.value = "TVL-ICT";
+          else if (val.includes("HE")) strandEl.value = "TVL-HE";
+          else if (val.includes("ABM")) strandEl.value = "ABM";
+          else if (val.includes("HUMSS")) strandEl.value = "HUMSS";
+          else if (val.includes("GAS")) strandEl.value = "GAS";
+        }
       }
+      updateDetectedChip();
     });
   }
 
@@ -826,7 +1091,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const count = list.length;
     const isTwoColumn = count >= 3;
 
-    if (navPassCount) navPassCount.textContent = count;
+    if (tabPassCount) tabPassCount.textContent = count;
     if (passesCountBadge) passesCountBadge.textContent = count + (count === 1 ? " Pass" : " Passes");
 
     if (!passesListContainer) return;
@@ -835,7 +1100,8 @@ document.addEventListener("DOMContentLoaded", function() {
     if (count === 0) {
       passesListContainer.innerHTML = `
         <div class="col-12 text-center text-muted py-3 small">
-          No passes saved on this device yet. Time In below or enter a Student ID above to load a pass and access the Seminar Evaluation Form.
+          No passes saved on this browser yet. Time In to create one, or
+          <button type="button" class="btn btn-link btn-sm p-0 fw-bold text-aclc-blue align-baseline" onclick="document.getElementById('btnToggleFriendForm').click();">recover a lost pass here</button>.
         </div>
       `;
       return;
@@ -863,16 +1129,25 @@ document.addEventListener("DOMContentLoaded", function() {
       const idTextClass = isTwoColumn ? "text-dark fw-bold font-monospace fs-4 mb-1" : "text-dark fw-bold font-monospace fs-3 mb-1";
       const qrDim = isTwoColumn ? 170 : 210;
 
-      // Determine Certificate / Attendance Badge
-      let statusBadgeHtml = `<div class="badge bg-blue-lt text-aclc-blue px-2 py-1 mb-2">Show QR at Scanner for Time Out</div>`;
+      // 3-Step Certificate Progress Checklist
+      const step1Label = `1. Time In: Done (${p.time_fmt || p.time || 'Recorded'})`;
+      const step2Done = evalStatus === "SUBMITTED";
+      const step2Label = step2Done
+        ? "2. Seminar Evaluation: Submitted"
+        : (isEvalOpen ? (hasDraft ? "2. Seminar Evaluation: In Progress" : "2. Seminar Evaluation: Open Now") : "2. Seminar Evaluation: Waiting to Open");
+      const step3Label = attEligible
+        ? `3. Exit QR Scan: Met (${durMin} min)`
+        : (hasTimeout ? `3. Exit QR Scan: Under Duration (${durMin} min)` : `3. Exit QR Scan: Pending (${currentMinDurLabel})`);
+
+      let statusBadgeHtml = `
+        <div class="text-start small border rounded p-2 mb-2 bg-light">
+          <div class="fw-bold text-success">${step1Label}</div>
+          <div class="fw-bold ${step2Done ? 'text-success' : (isEvalOpen ? 'text-hiv-crimson' : 'text-muted')}">${step2Label}</div>
+          <div class="fw-bold ${attEligible ? 'text-success' : (hasTimeout ? 'text-danger' : 'text-muted')}">${step3Label}</div>
+        </div>
+      `;
       if (isEligible) {
-        statusBadgeHtml = `<div class="badge bg-green text-white px-3 py-1 mb-2">Certificate Approved (Duration &amp; Evaluation Met)</div>`;
-      } else if (evalStatus === "SUBMITTED" && !hasTimeout) {
-        statusBadgeHtml = `<div class="badge bg-azure-lt text-azure px-2 py-1 mb-2">Evaluation Submitted &middot; Scan QR for Time Out (${currentMinDurLabel})</div>`;
-      } else if (attEligible && evalStatus !== "SUBMITTED") {
-        statusBadgeHtml = `<div class="badge bg-warning text-dark px-2 py-1 mb-2">Duration Met (${durMin} min) &middot; Submit Evaluation for Certificate</div>`;
-      } else if (hasTimeout && !attEligible) {
-        statusBadgeHtml = `<div class="badge bg-danger-lt text-danger px-2 py-1 mb-2">Timed Out (${durMin} min &ndash; Under Required Duration)</div>`;
+        statusBadgeHtml += `<div class="badge bg-green text-white px-3 py-1 mb-2">Certificate Ready (Will be emailed)</div>`;
       }
 
       // Determine Per-Card Evaluation Button
@@ -918,8 +1193,11 @@ document.addEventListener("DOMContentLoaded", function() {
           <div class="${idTextClass}">${p.student_id}</div>
           <div class="text-muted small mb-2">${p.section || 'General'} &middot; ${p.time_fmt || p.time || 'Timed In'}</div>
           ${statusBadgeHtml}
-          <div class="pt-1 border-top mt-2">
+          <div class="pt-1 border-top mt-2 d-grid gap-2">
             ${evalBtnHtml}
+            <button type="button" class="btn btn-outline-secondary btn-sm w-100 fw-bold btn-save-qr" data-qrid="${qrId}" data-id="${p.student_id}">
+              Save QR Image
+            </button>
           </div>
         </div>
       `;
@@ -946,6 +1224,39 @@ document.addEventListener("DOMContentLoaded", function() {
       btn.addEventListener("click", function() {
         const id = this.getAttribute("data-id");
         removePass(id);
+      });
+    });
+
+    // Attach Save QR Image handlers
+    document.querySelectorAll(".btn-save-qr").forEach(btn => {
+      btn.addEventListener("click", function() {
+        const qrid = this.getAttribute("data-qrid");
+        const sid = this.getAttribute("data-id") || "pass";
+        const container = document.getElementById(qrid);
+        if (!container) return;
+        const canvas = container.querySelector("canvas");
+        const img = container.querySelector("img");
+        let dataUrl = "";
+        if (canvas) {
+          const pad = 16;
+          const out = document.createElement("canvas");
+          out.width = canvas.width + pad * 2;
+          out.height = canvas.height + pad * 2;
+          const ctx = out.getContext("2d");
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, out.width, out.height);
+          ctx.drawImage(canvas, pad, pad);
+          dataUrl = out.toDataURL("image/png");
+        } else if (img && img.src) {
+          dataUrl = img.src;
+        }
+        if (!dataUrl) return;
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `${sid}_attendance_pass.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       });
     });
 
@@ -976,16 +1287,21 @@ document.addEventListener("DOMContentLoaded", function() {
 
   function collectFormDraft() {
     const draft = {};
-    for (let i = 1; i <= 10; i++) {
-      const checked = document.querySelector(`input[name="q1_${i}"]:checked`);
-      draft[`q1_${i}`] = checked ? parseInt(checked.value, 10) : null;
-    }
-    for (let part of [2, 3]) {
-      for (let j = 1; j <= 3; j++) {
-        const el = document.getElementById(`eval_q${part}_${j}`);
-        draft[`q${part}_${j}`] = el ? el.value : "";
+    const allItems = [
+      ...(evalQuizSchema.part1 || []),
+      ...(evalQuizSchema.part2 || []),
+      ...(evalQuizSchema.part3 || [])
+    ];
+    allItems.forEach(item => {
+      if (!item || item.enabled === false) return;
+      if (item.type === "rating") {
+        const checked = document.querySelector(`input[name="${item.id}"]:checked`);
+        draft[item.id] = checked ? parseInt(checked.value, 10) : null;
+      } else {
+        const el = document.getElementById(`eval_${item.id}`);
+        draft[item.id] = el ? el.value : "";
       }
-    }
+    });
     draft._ts = Date.now();
     return draft;
   }
@@ -1013,22 +1329,20 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     if (!draft) return;
-    for (let i = 1; i <= 10; i++) {
-      const val = draft[`q1_${i}`];
-      if (val && val >= 1 && val <= 5) {
-        const radio = document.getElementById(`opt_q1_${i}_${val}`);
-        if (radio) radio.checked = true;
+    Object.keys(draft).forEach(key => {
+      if (key === "_ts") return;
+      const val = draft[key];
+      if (val === null || val === undefined || val === "") return;
+      const radio = document.getElementById(`opt_${key}_${val}`);
+      if (radio) {
+        radio.checked = true;
+        return;
       }
-    }
-    for (let part of [2, 3]) {
-      for (let j = 1; j <= 3; j++) {
-        const key = `q${part}_${j}`;
-        const el = document.getElementById(`eval_${key}`);
-        if (el && draft[key]) {
-          el.value = draft[key];
-        }
+      const el = document.getElementById(`eval_${key}`);
+      if (el) {
+        el.value = val;
       }
-    }
+    });
     setTimeout(autoExpandAllEvalTextareas, 60);
   }
 
@@ -1257,6 +1571,7 @@ document.addEventListener("DOMContentLoaded", function() {
           body: JSON.stringify({
             student_id: cur.student_id,
             session_id: clientSessionId,
+            token: cur.token || "",
             draft: draft
           })
         });
@@ -1277,6 +1592,7 @@ document.addEventListener("DOMContentLoaded", function() {
       const payload = JSON.stringify({
         student_id: activeEvalStudent.student_id,
         session_id: clientSessionId,
+        token: activeEvalStudent.token || "",
         draft: draft
       });
       navigator.sendBeacon("/api/evaluation/release", payload);
@@ -1292,28 +1608,32 @@ document.addEventListener("DOMContentLoaded", function() {
       const answers = collectFormDraft();
       setLocalDraft(activeEvalStudent.student_id, answers);
 
-      // Client-side validation check
-      for (let i = 1; i <= 10; i++) {
-        if (!answers[`q1_${i}`]) {
-          evalFormErrorAlert.textContent = `Please select a rating (5 to 1) for Statement #${i} in Part I.`;
-          evalFormErrorAlert.classList.remove("d-none");
-          return;
-        }
-      }
-      for (let j = 1; j <= 3; j++) {
-        if (!answers[`q2_${j}`] || !answers[`q2_${j}`].trim()) {
-          evalFormErrorAlert.textContent = `Please answer Question #${j} in Part II (Learning Outcomes).`;
-          evalFormErrorAlert.classList.remove("d-none");
-          document.getElementById(`eval_q2_${j}`).focus();
-          return;
-        }
-      }
-      for (let j = 1; j <= 3; j++) {
-        if (!answers[`q3_${j}`] || !answers[`q3_${j}`].trim()) {
-          evalFormErrorAlert.textContent = `Please answer Question #${j} in Part III (Overall Assessment).`;
-          evalFormErrorAlert.classList.remove("d-none");
-          document.getElementById(`eval_q3_${j}`).focus();
-          return;
+      // Dynamic client-side validation for active questions
+      const sections = [
+        { key: "part1", label: "Part I" },
+        { key: "part2", label: "Part II (Learning Outcomes)" },
+        { key: "part3", label: "Part III (Overall Assessment)" }
+      ];
+      for (const sec of sections) {
+        const items = (evalQuizSchema[sec.key] || []).filter(it => it && it.enabled !== false);
+        for (let idx = 0; idx < items.length; idx++) {
+          const item = items[idx];
+          const val = answers[item.id];
+          if (item.type === "rating") {
+            if (!val) {
+              evalFormErrorAlert.textContent = `Please select a rating (5 to 1) for Question #${idx + 1} in ${sec.label}.`;
+              evalFormErrorAlert.classList.remove("d-none");
+              return;
+            }
+          } else {
+            if (!val || !String(val).trim()) {
+              evalFormErrorAlert.textContent = `Please answer Question #${idx + 1} in ${sec.label}.`;
+              evalFormErrorAlert.classList.remove("d-none");
+              const el = document.getElementById(`eval_${item.id}`);
+              if (el) el.focus();
+              return;
+            }
+          }
         }
       }
 
@@ -1376,18 +1696,6 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
   // Toggle Passes View from Navbar
-  if (btnTogglePasses) {
-    btnTogglePasses.addEventListener("click", function() {
-      if (myPassesSection) {
-        myPassesSection.classList.remove("d-none");
-        togglePassesCollapsed();
-        if (!myPassesCollapseBody.classList.contains("d-none")) {
-          myPassesSection.scrollIntoView({ behavior: 'smooth' });
-        }
-      }
-    });
-  }
-
   // Attendance Time-In Form Submit Handler
   if (attendanceForm) {
     attendanceForm.addEventListener("submit", async function(e) {
@@ -1396,6 +1704,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
       const studentIdInput = document.getElementById("student_id");
       const idVal = studentIdInput.value.trim().toUpperCase();
+      const idTypeVal = idTypeSelectEl ? idTypeSelectEl.value : "Student ID Number";
       const lastNameVal = document.getElementById("last_name").value.trim();
       const firstNameVal = document.getElementById("first_name").value.trim();
       const middleNameVal = document.getElementById("middle_name").value.trim() || "N/A";
@@ -1408,11 +1717,17 @@ document.addEventListener("DOMContentLoaded", function() {
       if (document.getElementById("levelCollege").checked) levelVal = "COLLEGE";
       if (document.getElementById("levelGuest").checked) levelVal = "NON_STUDENT";
 
+      const shsGradeVal = document.getElementById("shs_grade")?.value || null;
+      const strandVal = document.getElementById("strand")?.value || null;
+      const collegeYearVal = document.getElementById("college_year")?.value || null;
+      const courseVal = document.getElementById("course")?.value || null;
+
       submitBtn.disabled = true;
       submitBtn.innerText = "Recording...";
 
       const payload = {
         student_id: idVal,
+        id_type: idTypeVal,
         last_name: lastNameVal,
         first_name: firstNameVal,
         middle_name: middleNameVal,
@@ -1420,7 +1735,11 @@ document.addEventListener("DOMContentLoaded", function() {
         age: ageVal,
         email: emailVal,
         level: levelVal,
-        section: sectionVal
+        section: sectionVal,
+        shs_grade: levelVal === "SHS" ? shsGradeVal : null,
+        strand: levelVal === "SHS" ? strandVal : null,
+        college_year: levelVal === "COLLEGE" ? collegeYearVal : null,
+        course: levelVal === "COLLEGE" ? courseVal : null
       };
 
       try {
@@ -1458,11 +1777,10 @@ document.addEventListener("DOMContentLoaded", function() {
           submitBtn.innerText = "Time In";
           updateCategoryLabels();
 
-          // Show success message and reveal passes list
+          // Show success message and switch to My Passes
           timeInSuccessMsg.textContent = res.message || `Timed in as ${res.student_name}. Your pass and evaluation card are ready below.`;
           timeInSuccessAlert.classList.remove("d-none");
-          formCard.classList.add("d-none");
-          myPassesSection.classList.remove("d-none");
+          setActiveStudentTab("passes");
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
       } catch (err) {
@@ -1478,8 +1796,8 @@ document.addEventListener("DOMContentLoaded", function() {
   if (btnRegisterAnother) {
     btnRegisterAnother.addEventListener("click", function() {
       timeInSuccessAlert.classList.add("d-none");
+      setActiveStudentTab("timein");
       if (formCard) {
-        formCard.classList.remove("d-none");
         formCard.scrollIntoView({ behavior: "smooth" });
         const sidInput = document.getElementById("student_id");
         if (sidInput) sidInput.focus();
@@ -1487,75 +1805,94 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   }
 
-  // Add Friend's Pass by Student ID
+  // Add Friend's Pass by Name or Student ID
   const btnAddFriendPass = document.getElementById("btnAddFriendPass");
   const inputFriendId = document.getElementById("inputFriendId");
   const friendPassAlert = document.getElementById("friendPassAlert");
+  const friendPassMatches = document.getElementById("friendPassMatches");
+
+  function selectFriendPass(passData) {
+    savePass({
+      student_id: passData.student_id,
+      student_name: passData.student_name,
+      section: passData.section,
+      level: passData.level,
+      token: passData.token,
+      qr_data: passData.qr_data,
+      time: passData.time,
+      time_fmt: passData.time_fmt,
+      eval_status: passData.eval_status || "PENDING",
+      attendance_eligible: passData.attendance_eligible || false,
+      is_eligible: passData.is_eligible || false,
+      cert_status: passData.cert_status || "PENDING"
+    });
+    if (inputFriendId) inputFriendId.value = "";
+    if (friendPassMatches) {
+      friendPassMatches.innerHTML = "";
+      friendPassMatches.classList.add("d-none");
+    }
+    if (friendPassAlert) {
+      friendPassAlert.textContent = `Pass for ${passData.student_name} added!`;
+      friendPassAlert.className = "small mt-2 text-success fw-bold";
+    }
+    setTimeout(() => {
+      const cardEl = document.getElementById(`pass-card-${passData.student_id}`);
+      if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth' });
+    }, 250);
+  }
 
   async function handleAddFriendPass() {
+    const inputFriendLastName = document.getElementById("inputFriendLastName");
     if (!inputFriendId || !friendPassAlert) return;
-    const friendId = inputFriendId.value.trim().toUpperCase();
+    const query = inputFriendId.value.trim();
+    const lastName = inputFriendLastName ? inputFriendLastName.value.trim() : "";
     friendPassAlert.className = "small mt-2 d-none fw-bold";
-    if (!friendId) {
-      friendPassAlert.textContent = "Please enter a Student ID number.";
+    if (friendPassMatches) {
+      friendPassMatches.innerHTML = "";
+      friendPassMatches.classList.add("d-none");
+    }
+    if (!query || !lastName) {
+      friendPassAlert.textContent = "Please enter both your Student ID (or Email) and Last Name.";
       friendPassAlert.className = "small mt-2 text-danger fw-bold";
-      inputFriendId.focus();
+      (!query ? inputFriendId : inputFriendLastName).focus();
       return;
     }
 
     btnAddFriendPass.disabled = true;
-    btnAddFriendPass.textContent = "Looking up...";
+    btnAddFriendPass.textContent = "Checking...";
 
     try {
-      const resp = await fetch("/api/attendance/pass-lookup?student_id=" + encodeURIComponent(friendId));
+      const resp = await fetch("/api/attendance/pass-lookup?q=" + encodeURIComponent(query) + "&last_name=" + encodeURIComponent(lastName));
       const data = await resp.json();
 
       if (!resp.ok || data.status === "error") {
-        friendPassAlert.textContent = data.message || "Student ID not found.";
+        friendPassAlert.textContent = data.message || "No matching attendee found.";
         friendPassAlert.className = "small mt-2 text-danger fw-bold";
       } else {
-        savePass({
-          student_id: data.student_id,
-          student_name: data.student_name,
-          section: data.section,
-          level: data.level,
-          token: data.token,
-          qr_data: data.qr_data,
-          time: data.time,
-          time_fmt: data.time_fmt,
-          eval_status: data.eval_status || "PENDING",
-          attendance_eligible: data.attendance_eligible || false,
-          is_eligible: data.is_eligible || false,
-          cert_status: data.cert_status || "PENDING"
-        });
-        inputFriendId.value = "";
-        friendPassAlert.textContent = `Pass for ${data.student_name} added! They can now take their evaluation or show their QR pass below.`;
-        friendPassAlert.className = "small mt-2 text-success fw-bold";
-
-        setTimeout(() => {
-          const cardEl = document.getElementById(`pass-card-${data.student_id}`);
-          if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth' });
-        }, 300);
+        if (inputFriendLastName) inputFriendLastName.value = "";
+        selectFriendPass(data);
       }
     } catch(err) {
-      friendPassAlert.textContent = "Network error looking up student pass.";
+      friendPassAlert.textContent = "Network error looking up attendee pass.";
       friendPassAlert.className = "small mt-2 text-danger fw-bold";
     } finally {
       btnAddFriendPass.disabled = false;
-      btnAddFriendPass.textContent = "Add Pass";
+      btnAddFriendPass.textContent = "Load Pass";
     }
   }
 
   if (btnAddFriendPass) {
     btnAddFriendPass.addEventListener("click", handleAddFriendPass);
-    if (inputFriendId) {
-      inputFriendId.addEventListener("keydown", function(e) {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          handleAddFriendPass();
-        }
-      });
-    }
+    [inputFriendId, document.getElementById("inputFriendLastName")].forEach(el => {
+      if (el) {
+        el.addEventListener("keydown", function(e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            handleAddFriendPass();
+          }
+        });
+      }
+    });
   }
 
   async function syncPassesLiveStatus() {
@@ -1580,10 +1917,14 @@ document.addEventListener("DOMContentLoaded", function() {
   // Initialize saved passes on load
   renderPassesUI();
   syncPassesLiveStatus();
-  if (getSavedPasses().length === 0 && "{{ status }}" === "Time In") {
-    setPassesExpanded(false);
+  if ("{{ status }}" === "Time In") {
+    if (getSavedPasses().length === 0) {
+      setActiveStudentTab("timein");
+    } else {
+      setActiveStudentTab("passes");
+    }
   } else {
-    setPassesExpanded(true);
+    setActiveStudentTab("passes");
   }
 
   // Support direct test-try preview link (?try_quiz=1 or /try-evaluation)
@@ -1610,12 +1951,67 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   }
 
-  // Background status sync (Every 4 seconds)
-  setInterval(async function() {
+  const btnHowItWorks = document.getElementById("btnHowItWorks");
+  if (btnHowItWorks) {
+    btnHowItWorks.addEventListener("click", function() {
+      window.openModalById("modalHowItWorks");
+    });
+  }
+
+  // Connection status tracking & retry
+  let consecutiveFailedPolls = 0;
+
+  function setKioskConnectedState(connected) {
+    const banner = document.getElementById("offlineAlertBanner");
+    const netBadge = document.getElementById("kioskNetworkBadge");
+    if (connected) {
+      consecutiveFailedPolls = 0;
+      if (banner) banner.classList.add("d-none");
+      if (netBadge) {
+        netBadge.className = "badge bg-green-lt text-green px-2 py-1 fw-bold";
+        netBadge.textContent = "Connected";
+      }
+    } else {
+      if (banner) banner.classList.remove("d-none");
+      if (netBadge) {
+        netBadge.className = "badge bg-danger-lt text-danger px-2 py-1 fw-bold";
+        netBadge.textContent = "Disconnected";
+      }
+    }
+  }
+
+  window.addEventListener("offline", function() {
+    setKioskConnectedState(false);
+  });
+
+  window.retryKioskConnection = async function() {
+    const netBadge = document.getElementById("kioskNetworkBadge");
+    if (netBadge) netBadge.textContent = "Checking...";
     try {
-      const resp = await fetch("/api/kiosk-live");
-      if (!resp.ok) return;
+      const resp = await fetch("/api/kiosk-live?ts=" + Date.now(), { cache: "no-store" });
+      if (resp.ok) {
+        setKioskConnectedState(true);
+        await syncPassesLiveStatus();
+      } else {
+        setKioskConnectedState(false);
+      }
+    } catch (err) {
+      setKioskConnectedState(false);
+    }
+  };
+
+  // Slow background sync (Every 30-35s when visible, paused when tab hidden) + On-Demand Refresh
+  async function runLiveKioskSync(force = false) {
+    if (!force && document.hidden) return;
+    try {
+      const resp = await fetch("/api/kiosk-live", { cache: "no-store" });
+      if (!resp.ok) {
+        consecutiveFailedPolls++;
+        if (consecutiveFailedPolls >= 2) setKioskConnectedState(false);
+        return;
+      }
       const data = await resp.json();
+      setKioskConnectedState(true);
       
       const sessionText = document.getElementById("activeSessionText");
       const statusBadge = document.getElementById("activeStatusBadge");
@@ -1633,13 +2029,29 @@ document.addEventListener("DOMContentLoaded", function() {
         });
       }
 
+      if (data.eval_quiz_version && data.eval_quiz_version !== currentQuizVersion) {
+        try {
+          const sResp = await fetch("/api/evaluation/schema?ts=" + Date.now(), { cache: "no-store" });
+          if (sResp.ok) {
+            const sData = await sResp.json();
+            if (sData && sData.schema) {
+              const curDraft = activeEvalStudent ? collectFormDraft() : null;
+              evalQuizSchema = sData.schema;
+              currentQuizVersion = sData.version || data.eval_quiz_version;
+              renderEvaluationQuestions(evalQuizSchema);
+              if (curDraft) populateFormFromDraft(curDraft);
+            }
+          }
+        } catch(e) {}
+      }
+
       const prevEvalOpen = isEvalOpen;
       isEvalOpen = Boolean(data.eval_open);
       if (evalStateBadge) {
-        evalStateBadge.textContent = isEvalOpen ? "Evaluation Open" : "Evaluation Closed";
+        evalStateBadge.textContent = "Evaluation Form Open";
         evalStateBadge.className = isEvalOpen
-          ? "badge bg-hiv-crimson text-white px-3 py-2 fs-5 fw-bold"
-          : "badge bg-secondary-lt text-muted px-3 py-2 fs-5 fw-bold";
+          ? "badge bg-hiv-crimson text-white px-2 py-1 fw-bold"
+          : "badge bg-hiv-crimson text-white px-2 py-1 fw-bold d-none";
       }
       if (prevEvalOpen !== isEvalOpen) {
         renderPassesUI();
@@ -1648,11 +2060,11 @@ document.addEventListener("DOMContentLoaded", function() {
       if (statusBadge) {
         statusBadge.textContent = data.status;
         if (data.status === "Time Out") {
-          statusBadge.className = "badge bg-orange text-white px-3 py-2 fs-5 fw-bold";
+          statusBadge.className = "badge bg-orange text-white px-2 py-1 fw-bold";
         } else if (data.status === "Closed") {
-          statusBadge.className = "badge bg-secondary text-white px-3 py-2 fs-5 fw-bold";
+          statusBadge.className = "badge bg-secondary text-white px-2 py-1 fw-bold";
         } else {
-          statusBadge.className = "badge bg-green text-white px-3 py-2 fs-5 fw-bold";
+          statusBadge.className = "badge bg-green text-white px-2 py-1 fw-bold";
         }
       }
 
@@ -1670,19 +2082,24 @@ document.addEventListener("DOMContentLoaded", function() {
       const closedNotice = document.getElementById("closedNotice");
 
       if (data.status === "Time In") {
-        if (formCard && !timeInSuccessAlert.classList.contains("d-none")) {
-          // Student already submitted in this session
-        } else if (formCard) {
-          formCard.classList.remove("d-none");
+        if (studentViewTabs) studentViewTabs.classList.remove("d-none");
+        if (activeStudentTab === "passes") {
+          if (formCard) formCard.classList.add("d-none");
+          if (myPassesSection) myPassesSection.classList.remove("d-none");
+        } else {
+          if (formCard) formCard.classList.remove("d-none");
+          if (myPassesSection) myPassesSection.classList.add("d-none");
         }
         if (timeOutNotice) timeOutNotice.classList.add("d-none");
         if (closedNotice) closedNotice.classList.add("d-none");
       } else if (data.status === "Time Out") {
+        if (studentViewTabs) studentViewTabs.classList.add("d-none");
         if (formCard) formCard.classList.add("d-none");
         if (timeOutNotice) timeOutNotice.classList.remove("d-none");
         if (closedNotice) closedNotice.classList.add("d-none");
         if (myPassesSection) myPassesSection.classList.remove("d-none");
       } else {
+        if (studentViewTabs) studentViewTabs.classList.add("d-none");
         if (formCard) formCard.classList.add("d-none");
         if (timeOutNotice) timeOutNotice.classList.add("d-none");
         if (closedNotice) closedNotice.classList.remove("d-none");
@@ -1690,8 +2107,55 @@ document.addEventListener("DOMContentLoaded", function() {
       }
 
       await syncPassesLiveStatus();
-    } catch(e) {}
-  }, 4000);
+    } catch(e) {
+      consecutiveFailedPolls++;
+      if (consecutiveFailedPolls >= 2) setKioskConnectedState(false);
+    }
+  }
+
+  setInterval(() => runLiveKioskSync(false), 30000 + Math.floor(Math.random() * 5000));
+  document.addEventListener("visibilitychange", function() {
+    if (!document.hidden) {
+      runLiveKioskSync(false);
+    }
+  });
+
+  const btnManualRefreshStatus = document.getElementById("btnManualRefreshStatus");
+  if (btnManualRefreshStatus) {
+    btnManualRefreshStatus.addEventListener("click", async function() {
+      btnManualRefreshStatus.disabled = true;
+      btnManualRefreshStatus.textContent = "Syncing...";
+      try {
+        await runLiveKioskSync(true);
+      } finally {
+        btnManualRefreshStatus.disabled = false;
+        btnManualRefreshStatus.textContent = "Refresh";
+      }
+    });
+  }
+
+  // Light / Dark Mode Theme Toggle (Default: Light)
+  const btnThemeToggle = document.getElementById("btnThemeToggle");
+  const themeIconMoon = document.getElementById("themeIconMoon");
+  const themeIconSun = document.getElementById("themeIconSun");
+  function syncThemeUI(theme) {
+    const isDark = theme === "dark";
+    document.documentElement.setAttribute("data-bs-theme", isDark ? "dark" : "light");
+    if (themeIconMoon) themeIconMoon.classList.toggle("d-none", isDark);
+    if (themeIconSun) themeIconSun.classList.toggle("d-none", !isDark);
+    if (btnThemeToggle) {
+      btnThemeToggle.title = isDark ? "Switch to Light Mode" : "Switch to Dark Mode";
+    }
+  }
+  syncThemeUI(document.documentElement.getAttribute("data-bs-theme") || "light");
+  if (btnThemeToggle) {
+    btnThemeToggle.addEventListener("click", function() {
+      const current = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "dark" : "light";
+      const next = current === "dark" ? "light" : "dark";
+      try { localStorage.setItem("aclc_theme", next); } catch (e) {}
+      syncThemeUI(next);
+    });
+  }
 });
 </script>
 {% endblock %}

@@ -22,7 +22,12 @@ if %errorlevel% equ 0 (
 )
 
 if "%PY_CMD%"=="" (
-    echo [ERROR] Python 3.8+ was not found on this Windows machine!
+    echo [WARN] Python 3.8+ was not found. Attempting winget install if available...
+    where winget >nul 2>nul
+    if !errorlevel! equ 0 (
+        winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements >nul 2>nul
+    )
+    echo [ERROR] Python 3.8+ is required on this Windows machine!
     echo Please install Python 3.10 or newer from https://www.python.org/
     echo IMPORTANT: Check "Add Python to PATH" during installation.
     echo.
@@ -52,8 +57,10 @@ if "%NEED_VENV%"=="1" (
         exit /b 1
     )
     echo [INFO] Installing dependencies from requirements.txt...
-    "venv\Scripts\python.exe" -m pip install --upgrade pip --quiet
+    "venv\Scripts\python.exe" -m pip install --upgrade pip --quiet >nul 2>nul
     "venv\Scripts\python.exe" -m pip install -r requirements.txt
+) else (
+    "venv\Scripts\python.exe" -m pip install --upgrade pip --quiet >nul 2>nul
 )
 
 :: 3. Verify all required packages are ready
@@ -63,14 +70,31 @@ if %errorlevel% neq 0 (
     "venv\Scripts\python.exe" -m pip install -r requirements.txt
 )
 
-:: 4. Detect available port (8080 default, fallback 8000/8081) and active LAN IP
+:: 4. Detect available port (8080 default, fallback 8000/8081/8888) and network info
 for /f %%i in ('"venv\Scripts\python.exe" -c "import socket; p=next((x for x in (8080,8000,8081,8888) if socket.socket(socket.AF_INET,socket.SOCK_STREAM).connect_ex(('127.0.0.1',x))!=0),8080); print(p)"') do set "PORT=%%i"
 if "%PORT%"=="" set "PORT=8080"
 
-for /f %%i in ('"venv\Scripts\python.exe" -c "from main import get_local_ip; print(get_local_ip())"') do set "LAN_IP=%%i"
-if "%LAN_IP%"=="" set "LAN_IP=192.168.1.100"
+for /f "tokens=1-4 delims=|" %%a in ('"venv\Scripts\python.exe" -c "from main import get_network_status_info; i=get_network_status_info(); print(f\"{i['active_ssid']}|{i['target_ssid']}|{'1' if i['is_event_wifi'] else '0'}|{i['lan_ip']}\")" 2^>nul') do (
+    set "ACTIVE_SSID=%%a"
+    set "TARGET_SSID=%%b"
+    set "IS_EVENT_WIFI=%%c"
+    set "LAN_IP=%%d"
+)
+if "%LAN_IP%"=="" set "LAN_IP=192.168.0.100"
+if "%TARGET_SSID%"=="" set "TARGET_SSID=HIV Awareness Attendance"
 
-:: 5. Display Quick Access URLs
+:: 5. Display Diagnostics & Quick Access URLs
+echo.
+echo [WI-FI ^& NETWORK STATUS]
+echo   * Active Wi-Fi SSID:     %ACTIVE_SSID%
+echo   * Target Event Router:   %TARGET_SSID%
+echo   * Detected LAN IP:       %LAN_IP%
+if "%IS_EVENT_WIFI%"=="1" (
+    echo   * Connection Status:     [OK] Ready on Event Network
+) else (
+    echo   * Connection Status:     [NOTICE] Not connected to '%TARGET_SSID%'
+    echo     -^> Connect via Windows Wi-Fi menu or: netsh wlan connect name="%TARGET_SSID%"
+)
 echo.
 echo ============================================================
 echo   SERVER READY ^& LISTENING ON PORT %PORT%
@@ -82,12 +106,13 @@ echo   * Admin Control Dashboard:    http://localhost:%PORT%/admin
 echo   * Exit QR Pass Scanner:       http://localhost:%PORT%/admin/scanner
 echo   * Admin Master Password:      nevergrowold
 echo ============================================================
-echo   Note: Connect student phones to the same Wi-Fi router or
-echo   hotspot and scan the Projector QR code (http://%LAN_IP%:%PORT%/)
+echo   OPERATING INSTRUCTIONS:
+echo   1. Ensure host laptop is connected to '%TARGET_SSID%'.
+echo   2. Open http://localhost:%PORT%/projector and press F11.
+echo   3. Students scan Left QR (Wi-Fi), then Right QR (Student Portal).
+echo   4. Press Ctrl+C in this window at any time to stop the server.
 echo ============================================================
 echo.
-echo Press Ctrl+C in this window at any time to stop the server.
-echo.
 
-"venv\Scripts\python.exe" -m uvicorn main:app --host 0.0.0.0 --port %PORT% --reload
+"venv\Scripts\python.exe" -m uvicorn main:app --host 0.0.0.0 --port %PORT%
 pause

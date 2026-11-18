@@ -23,7 +23,7 @@ The system operates in a **100% offline environment** with zero internet depende
 4. Keep **Student Page URL** blank in `/admin` -> **3. Display Settings** so it uses the auto-detected IP automatically.
 
 ### Option B: Fixed Static IP (`192.168.1.100`) on Dedicated Offline Router
-1. Power on the offline Wi-Fi router and set SSID to `Event_Attendance`.
+1. Power on the offline Wi-Fi router and set SSID to `HIV Awareness Attendance`.
 2. Assign the host laptop the static IP `192.168.1.100` (Subnet mask `255.255.255.0`, Gateway `192.168.1.1`):
    * **Windows:** `Control Panel` -> `Network Connections` -> Right-click Wi-Fi/Ethernet -> `Properties` -> `IPv4` -> Use `192.168.1.100`.
    * **Linux:** `nmcli con mod "Wired connection 1" ipv4.addresses 192.168.1.100/24 ipv4.gateway 192.168.1.1 ipv4.method manual`

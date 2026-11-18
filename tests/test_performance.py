@@ -246,6 +246,7 @@ def run_performance_and_unit_tests():
         r_rel = client.post("/api/evaluation/release", json={
             "student_id": "2024-COL-002",
             "session_id": "SESS-DEVICE-1",
+            "token": maria_tok,
             "draft": partial_draft
         })
         assert r_rel.status_code == 200
@@ -405,8 +406,10 @@ def run_performance_and_unit_tests():
         assert p_data["proj_announcement"] == "Welcome to the Seminar! Please scan QR."
         print("  [PASS] Projector Dual QR & Wi-Fi Settings API")
 
-        # Test Pass Lookup Endpoint (Student adding friend's pass)
-        r_lookup = client.get("/api/attendance/pass-lookup?student_id=2024-SHS-001")
+        # Test Pass Lookup Endpoint (Requires ID/Email + Last Name verification)
+        r_lookup_unverified = client.get("/api/attendance/pass-lookup?student_id=2024-SHS-001")
+        assert r_lookup_unverified.status_code == 200 and r_lookup_unverified.json()["status"] == "error"
+        r_lookup = client.get("/api/attendance/pass-lookup?student_id=2024-SHS-001&last_name=Dela+Cruz")
         assert r_lookup.status_code == 200
         lookup_data = r_lookup.json()
         assert lookup_data["status"] == "success"
@@ -508,7 +511,8 @@ def run_performance_and_unit_tests():
             assert resp.status_code == 200
             checkin_latencies.append((t1 - t0) * 1000.0)
 
-        # Benchmark B: Statistics Aggregation Query Latency
+        # Benchmark B: Statistics Aggregation Query Latency (Admin Auth Required)
+        assert TestClient(main.app).get("/api/stats").status_code == 401
         stats_latencies = []
         for _ in range(50):
             t0 = time.perf_counter()

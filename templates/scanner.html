@@ -90,7 +90,7 @@
         </div>
 
         <div id="cameraIdleAlert" class="py-3 text-muted">
-          <p class="mb-0">Tap <strong>Start Camera</strong> for live scanning, <strong>Snap QR Photo</strong> on mobile phones, or enter Student ID below.</p>
+          <p class="mb-1">Tap <strong>Start Camera</strong> for continuous live scanning (works on <code>localhost</code> or HTTPS), <strong>Snap QR Photo</strong> on phones over HTTP, or use a USB QR scanner below.</p>
         </div>
       </div>
     </div>
@@ -122,7 +122,7 @@
       <div class="card-body p-3">
         <label class="form-label fw-bold text-aclc-blue mb-1">Manual Entry / USB Barcode Scanner</label>
         <form id="manualScanForm" class="d-flex gap-2">
-          <input type="text" id="manualScanInput" class="form-control form-control-lg font-monospace text-uppercase" placeholder="Student ID (e.g. 2024-01234)" autofocus autocomplete="off">
+          <input type="text" id="manualScanInput" class="form-control form-control-lg font-monospace text-uppercase" placeholder="Student ID (e.g. C24-01234)" autofocus autocomplete="off">
           <button type="submit" id="btnManualSubmit" class="btn btn-aclc fw-bold px-4">
             Time Out
           </button>
@@ -392,8 +392,47 @@ document.addEventListener("DOMContentLoaded", function() {
   // Camera Management
   let isCameraTransitioning = false;
 
+  function resetCameraUI(errorMsg) {
+    isCameraScanning = false;
+    cameraContainer.classList.add("d-none");
+    cameraIdleAlert.classList.remove("d-none");
+    btnToggleCamera.className = "btn btn-aclc btn-sm fw-bold";
+    btnToggleCamera.textContent = "Start Camera";
+    if (errorMsg) {
+      scanErrorBox.textContent = errorMsg;
+      scanErrorBox.classList.remove("d-none");
+    }
+  }
+
+  function isPermissionDeniedError(err) {
+    if (!err) return false;
+    const name = String(err.name || "");
+    const msg = String(err.message || err || "").toLowerCase();
+    return name === "NotAllowedError" || name === "PermissionDeniedError" ||
+      msg.includes("permission") || msg.includes("notallowed") || msg.includes("denied");
+  }
+
   async function startCamera() {
     if (isCameraTransitioning || isCameraScanning) return;
+    scanErrorBox.classList.add("d-none");
+
+    // Browsers block getUserMedia on plain HTTP LAN URLs (non-secure context)
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      resetCameraUI("Live camera requires HTTPS or localhost. Use 'Snap QR Photo' or Manual Entry below.");
+      return;
+    }
+
+    // Check if permission was already explicitly denied so we don't loop/re-prompt
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const perm = await navigator.permissions.query({ name: "camera" });
+        if (perm && perm.state === "denied") {
+          resetCameraUI("Camera permission is blocked. Allow camera access in your browser site settings, or use 'Snap QR Photo' / Manual Entry.");
+          return;
+        }
+      } catch (e) {}
+    }
+
     isCameraTransitioning = true;
     btnToggleCamera.disabled = true;
     cameraContainer.classList.remove("d-none");
@@ -412,32 +451,33 @@ document.addEventListener("DOMContentLoaded", function() {
     };
 
     try {
+      let cameraTarget = { facingMode: "environment" };
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        if (cameras && cameras.length > 0) {
+          const backCam = cameras.find(c => /back|rear|environment/i.test(c.label || ""));
+          cameraTarget = (backCam || cameras[0]).id;
+        }
+      } catch (camErr) {
+        if (isPermissionDeniedError(camErr)) {
+          throw camErr;
+        }
+      }
+
       await html5QrCode.start(
-        { facingMode: "environment" },
+        cameraTarget,
         config,
         (decodedText) => submitTimeOut(decodedText),
         () => {}
       );
       isCameraScanning = true;
       btnToggleCamera.textContent = "Stop Camera";
-    } catch (errEnv) {
-      try {
-        await html5QrCode.start(
-          { facingMode: "user" },
-          config,
-          (decodedText) => submitTimeOut(decodedText),
-          () => {}
-        );
-        isCameraScanning = true;
-        btnToggleCamera.textContent = "Stop Camera";
-      } catch (errUser) {
-        isCameraScanning = false;
-        cameraContainer.classList.add("d-none");
-        cameraIdleAlert.classList.remove("d-none");
-        btnToggleCamera.className = "btn btn-aclc btn-sm fw-bold";
-        btnToggleCamera.textContent = "Start Camera";
-        scanErrorBox.textContent = "Camera access was not available. Grant camera permission or use Manual Entry below.";
-        scanErrorBox.classList.remove("d-none");
+    } catch (err) {
+      try { html5QrCode.clear(); } catch (e) {}
+      if (isPermissionDeniedError(err)) {
+        resetCameraUI("Camera permission was denied. Allow camera access in your browser settings, or use 'Snap QR Photo' / Manual Entry.");
+      } else {
+        resetCameraUI("Camera is unavailable on this device or already in use. Use 'Snap QR Photo' or Manual Entry below.");
       }
     } finally {
       isCameraTransitioning = false;
@@ -470,6 +510,17 @@ document.addEventListener("DOMContentLoaded", function() {
     if (isCameraScanning) stopCamera();
     else startCamera();
   });
+
+  // Auto-start continuous live camera if already permitted in a secure context (localhost / HTTPS)
+  (async function autoStartIfPermitted() {
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.permissions || !navigator.permissions.query) return;
+    try {
+      const perm = await navigator.permissions.query({ name: "camera" });
+      if (perm && perm.state === "granted") {
+        startCamera();
+      }
+    } catch (e) {}
+  })();
 
   // Snap QR Photo / File Scanner (Works on all mobile phones over plain HTTP LAN)
   const qrFileInput = document.getElementById("qrFileInput");

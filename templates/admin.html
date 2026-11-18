@@ -96,22 +96,103 @@
       <a href="/admin" class="btn btn-light btn-sm fw-bold">Dashboard</a>
       <a href="/admin/scanner" class="btn btn-warning btn-sm fw-bold text-dark">Scanner</a>
       <a href="/projector" target="_blank" class="btn btn-gold btn-sm fw-bold">Projector</a>
+      <a href="/quality" class="btn btn-outline-light btn-sm fw-bold">Quality</a>
       <a href="/admin/logout" class="btn btn-outline-light btn-sm">Logout</a>
     </div>
   </div>
 </header>
 
-<div class="page-body my-4">
+<div class="page-body my-3">
   <div class="container-xl">
+
+    <!-- Compact Host Network & Wi-Fi Status Bar -->
+    <div class="card shadow-sm mb-3 border-0 {% if not network.is_event_wifi %}border-start border-4 border-warning{% endif %}">
+      <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center flex-wrap gap-2 small">
+          <span class="fw-bold text-dark">Wi-Fi:</span>
+          <span id="adminNetSsidBadge" class="badge {% if network.is_event_wifi %}bg-green text-white{% else %}bg-warning text-dark{% endif %} fw-bold">
+            {{ network.active_ssid }}
+          </span>
+          <span id="adminNetStatusPill" class="badge {% if network.is_event_wifi %}bg-green-lt text-green{% else %}bg-warning-lt text-dark{% endif %} fw-bold">
+            {% if network.is_event_wifi %}Connected to Event Network{% elif network.qr_mismatch %}Wi-Fi QR Mismatch (QR: {{ network.target_ssid }}){% else %}Not on Target Event Wi-Fi{% endif %}
+          </span>
+          <span class="text-muted">
+            IP: <strong class="font-monospace text-dark" id="adminNetIpText">{{ network.lan_ip }}:{{ network.port }}</strong>
+            &middot; Target: <strong class="text-dark" id="adminNetTargetText">{{ network.target_ssid }}</strong>
+          </span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" id="btnAdminQuickConnect" class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" onclick="adminTriggerConnectWifi()">
+            Connect to Event Wi-Fi
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="refreshAdminNetworkStatus()">
+            Check Network
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pinned Live KPI Strip -->
+    <div class="row g-2 mb-3">
+      <div class="col-md col-6">
+        <div class="stat-box py-2 px-3">
+          <div class="text-muted small text-uppercase fw-bold">Total Attendees</div>
+          <div class="fs-2 fw-bold text-aclc-blue" id="kpiTotal">{{ stats.total }}</div>
+        </div>
+      </div>
+      <div class="col-md col-6">
+        <div class="stat-box py-2 px-3">
+          <div class="text-muted small text-uppercase fw-bold">Timed In (M / A)</div>
+          <div class="fs-2 fw-bold text-dark"><span id="kpiMornIn">{{ stats.morning_in }}</span> / <span id="kpiAftIn">{{ stats.afternoon_in }}</span></div>
+        </div>
+      </div>
+      <div class="col-md col-6">
+        <div class="stat-box py-2 px-3">
+          <div class="text-muted small text-uppercase fw-bold">Timed Out (M / A)</div>
+          <div class="fs-2 fw-bold text-dark"><span id="kpiMornOut">{{ stats.morning_out }}</span> / <span id="kpiAftOut">{{ stats.afternoon_out }}</span></div>
+        </div>
+      </div>
+      <div class="col-md col-6">
+        <div class="stat-box py-2 px-3">
+          <div class="text-muted small text-uppercase fw-bold">Evaluations</div>
+          <div class="fs-2 fw-bold text-hiv-crimson" id="kpiEvalSubmitted">{{ stats.eval_submitted }}</div>
+          <div class="small text-muted">Drafts: <strong id="kpiEvalDrafts">{{ stats.eval_in_progress }}</strong></div>
+        </div>
+      </div>
+      <div class="col-md col-12">
+        <div class="stat-box border-success py-2 px-3">
+          <div class="text-muted small text-uppercase fw-bold">Certificate Approved</div>
+          <div class="fs-2 fw-bold text-success" id="kpiEligible">{{ stats.eligible }}</div>
+          <div class="small text-muted">Duration Met: <span id="kpiAttEligible">{{ stats.attendance_eligible }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Workspace Navigation Tabs -->
+    <ul class="nav nav-tabs mb-3 fw-bold" id="adminWorkspaceTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" type="button" data-admin-tab="tabControl">Live Control</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" type="button" data-admin-tab="tabAttendees">Attendees</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" type="button" data-admin-tab="tabDisplay">Display &amp; Projector</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" type="button" data-admin-tab="tabReports">Reports &amp; Certificates</button>
+      </li>
+    </ul>
 
     <!-- ================================================================= -->
     <!-- SECTION 1: EVENT & EVALUATION CONTROL                             -->
     <!-- ================================================================= -->
+    <div id="tabControl" class="admin-tab-pane">
     <div class="section-card">
       <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
           <h3 class="mb-0 text-aclc-blue fw-bold">1. Event &amp; Evaluation Control</h3>
-          <small class="text-muted">Control active session, Time In / Time Out, Seminar Evaluation availability, and required minutes</small>
+          <small class="text-muted">One-click seminar phase stepper, evaluation availability, and minimum duration</small>
         </div>
         <div class="d-flex align-items-center gap-2">
           <span class="badge {% if eval_open %}bg-hiv-crimson text-white{% else %}bg-secondary text-white{% endif %} fs-4 px-3 py-2" id="headerEvalStatusBadge">
@@ -123,32 +204,27 @@
         </div>
       </div>
       <div class="card-body p-4">
+        <div class="mb-4">
+          <label class="form-label fw-bold mb-2">Seminar Phase Stepper (Click to Switch Active Phase)</label>
+          <div class="btn-group w-100 flex-wrap" role="group" aria-label="Seminar Phase Stepper">
+            <button type="button" class="btn btn-phase-step {% if phase == 'MORNING_IN' %}btn-success text-white fw-bold{% else %}btn-outline-secondary{% endif %}" data-phase="MORNING_IN">1. Morning In</button>
+            <button type="button" class="btn btn-phase-step {% if phase == 'MORNING_OUT' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}" data-phase="MORNING_OUT">2. Morning Out</button>
+            <button type="button" class="btn btn-phase-step {% if phase == 'AFTERNOON_IN' %}btn-success text-white fw-bold{% else %}btn-outline-secondary{% endif %}" data-phase="AFTERNOON_IN">3. Afternoon In</button>
+            <button type="button" class="btn btn-phase-step {% if phase == 'AFTERNOON_OUT' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}" data-phase="AFTERNOON_OUT">4. Afternoon Out</button>
+            <button type="button" class="btn btn-phase-step {% if phase == 'LOCKED' %}btn-danger text-white fw-bold{% else %}btn-outline-secondary{% endif %}" data-phase="LOCKED">Closed</button>
+          </div>
+          <small class="text-muted d-block mt-1">Student devices and the Exit Scanner update automatically when you switch phases.</small>
+        </div>
+
         <div class="row g-3 align-items-start">
-          
-          <!-- Session Selector -->
-          <div class="col-lg-3 col-md-6">
-            <label class="form-label fw-bold mb-1">Session</label>
-            <div class="btn-group w-100" role="group">
-              <button type="button" class="btn btn-session {% if session == 'Morning' %}btn-aclc{% else %}btn-outline-secondary{% endif %}" data-session="MORNING">Morning</button>
-              <button type="button" class="btn btn-session {% if session == 'Afternoon' %}btn-aclc{% else %}btn-outline-secondary{% endif %}" data-session="AFTERNOON">Afternoon</button>
+          <!-- Evaluation Form Open / Close Toggle + Real-time Quiz Editor -->
+          <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-center mb-1" style="min-height: 26px;">
+              <label class="form-label fw-bold mb-0 text-hiv-crimson">Seminar Evaluation Form</label>
+              <button type="button" id="btnOpenQuizEditor" class="btn btn-outline-primary btn-sm py-0 px-2 fw-bold" style="font-size: 0.72rem; line-height: 1.4;" data-bs-toggle="modal" data-bs-target="#modalQuizEditor">
+                Edit Quiz
+              </button>
             </div>
-            <small class="text-muted d-block mt-1">Select active seminar half-day</small>
-          </div>
-
-          <!-- Status Selector -->
-          <div class="col-lg-3 col-md-6">
-            <label class="form-label fw-bold mb-1">Attendance Status</label>
-            <div class="btn-group w-100" role="group">
-              <button type="button" class="btn btn-status {% if status == 'Time In' %}btn-success text-white{% else %}btn-outline-secondary{% endif %}" data-status="IN">Time In</button>
-              <button type="button" class="btn btn-status {% if status == 'Time Out' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}" data-status="OUT">Time Out</button>
-              <button type="button" class="btn btn-status {% if status == 'Closed' %}btn-danger text-white{% else %}btn-outline-secondary{% endif %}" data-status="CLOSED">Closed</button>
-            </div>
-            <small class="text-muted d-block mt-1">Time In form vs Exit Scanner</small>
-          </div>
-
-          <!-- Evaluation Form Open / Close Toggle -->
-          <div class="col-lg-3 col-md-6">
-            <label class="form-label fw-bold mb-1 text-hiv-crimson">Seminar Evaluation Form</label>
             <div class="btn-group w-100" role="group">
               <button type="button" id="btnEvalOpen" class="btn {% if eval_open %}btn-hiv{% else %}btn-outline-secondary{% endif %}">Open Quiz</button>
               <button type="button" id="btnEvalClose" class="btn {% if not eval_open %}btn-dark text-white fw-bold{% else %}btn-outline-secondary{% endif %}">Closed</button>
@@ -157,8 +233,10 @@
           </div>
 
           <!-- Minimum Minutes -->
-          <div class="col-lg-3 col-md-6">
-            <label class="form-label fw-bold mb-1">Minimum Minutes for Eligibility</label>
+          <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-center mb-1" style="min-height: 26px;">
+              <label class="form-label fw-bold mb-0">Minimum Minutes for Eligibility</label>
+            </div>
             <div class="input-group">
               <input type="number" id="minDurationInput" class="form-control" value="{{ min_duration }}" min="1" max="600">
               <span class="input-group-text">min</span>
@@ -166,50 +244,15 @@
             </div>
             <small class="text-muted d-block mt-1">Required: <strong class="text-aclc-blue" id="minDurationHelperText">{{ min_duration_label }}</strong> + Evaluation</small>
           </div>
-
-        </div>
-
-        <!-- Attendance & Evaluation KPI Counts -->
-        <div class="row g-3 mt-3">
-          <div class="col-md col-6">
-            <div class="stat-box">
-              <div class="text-muted small text-uppercase fw-bold">Total Attendees</div>
-              <div class="fs-1 fw-bold text-aclc-blue" id="kpiTotal">{{ stats.total }}</div>
-            </div>
-          </div>
-          <div class="col-md col-6">
-            <div class="stat-box">
-              <div class="text-muted small text-uppercase fw-bold">Timed In (Morn / Aft)</div>
-              <div class="fs-1 fw-bold text-dark"><span id="kpiMornIn">{{ stats.morning_in }}</span> / <span id="kpiAftIn">{{ stats.afternoon_in }}</span></div>
-            </div>
-          </div>
-          <div class="col-md col-6">
-            <div class="stat-box">
-              <div class="text-muted small text-uppercase fw-bold">Timed Out (Morn / Aft)</div>
-              <div class="fs-1 fw-bold text-dark"><span id="kpiMornOut">{{ stats.morning_out }}</span> / <span id="kpiAftOut">{{ stats.afternoon_out }}</span></div>
-            </div>
-          </div>
-          <div class="col-md col-6">
-            <div class="stat-box">
-              <div class="text-muted small text-uppercase fw-bold">Evaluations Submitted</div>
-              <div class="fs-1 fw-bold text-hiv-crimson" id="kpiEvalSubmitted">{{ stats.eval_submitted }}</div>
-              <div class="small text-muted">In Progress Drafts: <strong id="kpiEvalDrafts">{{ stats.eval_in_progress }}</strong></div>
-            </div>
-          </div>
-          <div class="col-md col-12">
-            <div class="stat-box border-success">
-              <div class="text-muted small text-uppercase fw-bold">Certificate Approved</div>
-              <div class="fs-1 fw-bold text-success" id="kpiEligible">{{ stats.eligible }}</div>
-              <div class="small text-muted">Duration Met (<span id="kpiAttEligible">{{ stats.attendance_eligible }}</span>) + Evaluation</div>
-            </div>
-          </div>
         </div>
       </div>
+    </div>
     </div>
 
     <!-- ================================================================= -->
     <!-- SECTION 2: ATTENDEES                                              -->
     <!-- ================================================================= -->
+    <div id="tabAttendees" class="admin-tab-pane d-none">
     <div class="section-card">
       <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="d-flex align-items-center gap-3 flex-wrap">
@@ -220,15 +263,25 @@
           <button type="button" class="btn btn-aclc btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalManualAdd">
             Add Attendee
           </button>
+          <button type="button" class="btn btn-outline-danger btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalClearAllData">
+            Clear All Data
+          </button>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
-          <input type="text" id="tableSearch" class="form-control form-control-sm" placeholder="Search ID, name, section...">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <input type="text" id="tableSearch" class="form-control form-control-sm" placeholder="Search ID, name, section..." style="min-width: 180px;">
           <select id="filterLevel" class="form-select form-select-sm" style="width: auto;">
             <option value="">All Categories</option>
             <option value="SHS">SHS</option>
             <option value="COLLEGE">College</option>
             <option value="NON_STUDENT">Guest</option>
+          </select>
+          <select id="filterStatus" class="form-select form-select-sm" style="width: auto;">
+            <option value="">All Statuses</option>
+            <option value="eligible">Certificate Eligible</option>
+            <option value="missing_out">Missing Time Out</option>
+            <option value="eval_pending">Evaluation Pending</option>
+            <option value="noid">Temporary NOID</option>
           </select>
         </div>
       </div>
@@ -279,6 +332,16 @@
               <td>
                 {% if a.is_eligible %}
                   <span class="badge bg-green text-white">Approved</span>
+                  {% set es = a.cert_email_status or 'NOT_SENT' %}
+                  {% if es == 'SENT' %}
+                    <span class="badge bg-azure-lt text-azure mt-1">Emailed</span>
+                  {% elif es == 'SENDING' %}
+                    <span class="badge bg-warning-lt text-warning mt-1">Sending</span>
+                  {% elif es == 'FAILED' %}
+                    <span class="badge bg-danger-lt text-danger mt-1" title="{{ a.cert_email_error or 'Email failed' }}">Email Failed</span>
+                  {% else %}
+                    <span class="badge bg-secondary-lt mt-1">Not Sent</span>
+                  {% endif %}
                 {% elif a.attendance_eligible and a.eval_status != 'SUBMITTED' %}
                   <span class="badge bg-warning-lt text-warning">Needs Eval</span>
                 {% elif a.eval_status == 'SUBMITTED' and not a.attendance_eligible %}
@@ -289,6 +352,14 @@
               </td>
               <td class="text-end">
                 <div class="btn-group btn-group-sm">
+                  {% if a.is_eligible %}
+                  <button type="button" class="btn btn-outline-success btn-send-cert"
+                          data-id="{{ a.student_id }}"
+                          data-name="{{ a.full_name }}"
+                          data-email="{{ a.email }}">
+                    {{ 'Resend' if a.cert_email_status == 'SENT' else 'Email Cert' }}
+                  </button>
+                  {% endif %}
                   <button type="button" class="btn btn-outline-primary btn-view-pass"
                           data-id="{{ a.student_id }}"
                           data-name="{{ a.full_name }}"
@@ -335,10 +406,12 @@
         </table>
       </div>
     </div>
+    </div>
 
     <!-- ================================================================= -->
     <!-- SECTION 3: DISPLAY SETTINGS & LIVE PREVIEW                        -->
     <!-- ================================================================= -->
+    <div id="tabDisplay" class="admin-tab-pane d-none">
     <div class="section-card">
       <div class="section-header">
         <h3 class="mb-0 text-aclc-blue fw-bold">3. Display Settings</h3>
@@ -357,7 +430,7 @@
             </div>
             <div class="col-md-4">
               <label class="form-label fw-bold">Wi-Fi Name (SSID)</label>
-              <input type="text" class="form-control" id="cfgWifiSsid" value="{{ wifi_ssid or 'Event_Attendance' }}" maxlength="64">
+              <input type="text" class="form-control" id="cfgWifiSsid" value="{{ wifi_ssid or 'HIV Awareness Attendance' }}" maxlength="64">
             </div>
             <div class="col-md-4">
               <label class="form-label fw-bold">Wi-Fi Password</label>
@@ -394,7 +467,7 @@
               <a href="/projector" target="_blank" class="small text-aclc-blue fw-bold">Open Projector</a>
             </div>
             <div class="iframe-preview-wrapper">
-              <iframe id="previewProjectorIframe" src="/projector"></iframe>
+              <iframe id="previewProjectorIframe" data-src="/projector"></iframe>
             </div>
           </div>
           <div class="col-md-6">
@@ -403,17 +476,19 @@
               <a href="/" target="_blank" class="small text-aclc-blue fw-bold">Open Student Page</a>
             </div>
             <div class="iframe-preview-wrapper">
-              <iframe id="previewStudentIframe" src="/"></iframe>
+              <iframe id="previewStudentIframe" data-src="/"></iframe>
             </div>
           </div>
         </div>
 
       </div>
     </div>
+    </div>
 
     <!-- ================================================================= -->
     <!-- SECTION 4: REPORTS, EVALUATION TALLY & CSV EXPORTS                -->
     <!-- ================================================================= -->
+    <div id="tabReports" class="admin-tab-pane d-none">
     <div class="section-card">
       <div class="section-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
@@ -425,6 +500,22 @@
         </button>
       </div>
       <div class="card-body p-4">
+
+        <!-- 3-Step Certificate & Quality Workflow -->
+        <div class="p-3 bg-light rounded border mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div class="small">
+            <strong class="text-aclc-blue d-block">Certificate Workflow</strong>
+            <span class="text-muted">1. Clean names/emails in Quality Check &rarr; 2. Configure &amp; preview template &rarr; 3. Send emails</span>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <a href="/quality" class="btn btn-outline-dark btn-sm fw-bold">
+              1. Quality Check (/quality)
+            </a>
+            <button type="button" class="btn btn-dark btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#certStudioModal">
+              2. Certificate Studio &amp; SMTP
+            </button>
+          </div>
+        </div>
 
         <!-- Seminar Evaluation Summary Banner -->
         <div class="p-3 bg-light rounded border mb-4">
@@ -502,9 +593,19 @@
             <a href="/api/export/evaluation-csv" class="btn btn-hiv fw-bold w-100">Download Evaluation Responses CSV</a>
             <a href="/api/export/deped-csv" class="btn btn-aclc fw-bold w-100">Download Attendance Master CSV</a>
             <a href="/api/export/certificate-csv" class="btn btn-gold fw-bold w-100">Download Certificate Eligible CSV</a>
+            <a href="/api/export/certificate-delivery-csv" class="btn btn-outline-success fw-bold w-100">Download Email Delivery Report CSV</a>
+            <div class="d-flex gap-2">
+              <button type="button" id="btnOpenCertStudio" class="btn btn-dark fw-bold flex-fill" data-bs-toggle="modal" data-bs-target="#certStudioModal">
+                Certificate Studio &amp; SMTP
+              </button>
+              <a href="/quality" class="btn btn-outline-dark fw-bold">
+                Quality Check (/quality)
+              </a>
+            </div>
           </div>
         </div>
       </div>
+    </div>
     </div>
 
     <!-- Attribution Footer -->
@@ -557,6 +658,62 @@
   </div>
 </div>
 
+<!-- Modal: Real-Time Quiz / Evaluation Editor -->
+<div class="modal fade" id="modalQuizEditor" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content shadow border-0">
+      <div class="modal-header bg-hiv-header text-white">
+        <div>
+          <h5 class="modal-title fw-bold mb-0">Real-Time Quiz &amp; Evaluation Editor</h5>
+          <small class="text-white-50">Changes push live to all connected students automatically</small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <!-- Add New Question Bar -->
+        <div class="card bg-light border mb-4">
+          <div class="card-body p-3">
+            <div class="fw-bold text-aclc-blue mb-2">Add New Question</div>
+            <div class="row g-2 align-items-end">
+              <div class="col-md-3 col-6">
+                <label class="form-label small fw-bold mb-1">Section</label>
+                <select id="newQSection" class="form-select form-select-sm">
+                  <option value="part1">Part I: Evaluation Criteria</option>
+                  <option value="part2">Part II: Learning Outcomes</option>
+                  <option value="part3">Part III: Overall Assessment</option>
+                </select>
+              </div>
+              <div class="col-md-2 col-6">
+                <label class="form-label small fw-bold mb-1">Answer Type</label>
+                <select id="newQType" class="form-select form-select-sm">
+                  <option value="rating">Rating (5 to 1)</option>
+                  <option value="text">Text Answer</option>
+                </select>
+              </div>
+              <div class="col-md-5 col-12">
+                <label class="form-label small fw-bold mb-1">Question / Statement Text</label>
+                <input type="text" id="newQText" class="form-control form-control-sm" placeholder="Enter new question..." maxlength="500">
+              </div>
+              <div class="col-md-2 col-12">
+                <button type="button" id="btnAddQuizQuestion" class="btn btn-aclc btn-sm fw-bold w-100">+ Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="quizEditorSections"></div>
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" id="btnResetQuizSchema" class="btn btn-outline-danger btn-sm fw-bold">Reset to Default</button>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" id="btnSaveQuizSchema" class="btn btn-hiv fw-bold px-4">Save &amp; Push Live</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Add Attendee -->
 <div class="modal fade" id="modalManualAdd" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -570,7 +727,7 @@
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label required">Student ID</label>
-              <input type="text" class="form-control text-uppercase font-monospace" id="manStudentId" placeholder="e.g. 2024-01234" maxlength="50" required>
+              <input type="text" class="form-control text-uppercase font-monospace" id="manStudentId" placeholder="e.g. C24-01234" maxlength="50" required>
             </div>
             <div class="col-md-6">
               <label class="form-label required">Section</label>
@@ -755,6 +912,205 @@
     </div>
   </div>
 </div>
+
+<!-- Modal: Clear All Test Data -->
+<div class="modal fade" id="modalClearAllData" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title fw-bold">Clear All Test Data</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small mb-2">
+          This will permanently delete <strong>all attendees, evaluation responses, and generated certificate PDFs</strong> so you can start fresh for the live seminar.
+        </p>
+        <p class="small text-muted mb-3">
+          Preserved: Event Title, Wi-Fi settings, minimum duration, Gmail SMTP credentials, Certificate Template PNG, and Evaluation Quiz schema.
+        </p>
+        <label class="form-label fw-bold small">Type <span class="font-monospace text-danger">CLEAR ALL</span> to confirm:</label>
+        <input type="text" id="inputClearAllConfirm" class="form-control font-monospace" placeholder="CLEAR ALL" autocomplete="off">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btnConfirmClearAll" class="btn btn-danger fw-bold" disabled>Clear All Data</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Certificate Studio & Gmail Delivery -->
+<div class="modal fade" id="certStudioModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-aclc-blue text-white">
+        <h5 class="modal-title fw-bold">Certificate Studio &amp; Gmail SMTP Delivery</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-4">
+          <!-- Left: Canva Template & Placement -->
+          <div class="col-lg-7">
+            <h6 class="text-uppercase text-muted fw-bold small mb-2">1. Canva Certificate Template &amp; Text Placement</h6>
+            <div class="card card-body bg-light mb-3">
+              <div class="row g-2 align-items-end">
+                <div class="col-md-7">
+                  <label class="form-label small fw-bold mb-1">Upload Canva Export (PNG or JPG)</label>
+                  <input type="file" id="certTemplateFile" class="form-control form-control-sm" accept="image/png,image/jpeg,image/webp">
+                </div>
+                <div class="col-md-5 d-flex gap-2">
+                  <button type="button" id="btnUploadCertTemplate" class="btn btn-sm btn-aclc fw-bold flex-fill">Upload Template</button>
+                  <button type="button" id="btnResetCertTemplate" class="btn btn-sm btn-outline-secondary" title="Revert to built-in ACLC layout">Reset</button>
+                </div>
+              </div>
+              <div class="small text-muted mt-2" id="certTemplateStatusText">
+                Using built-in ACLC layout. Upload your Canva PNG/JPG export to use your custom design.
+              </div>
+            </div>
+
+            <!-- Live Placement Overlay Preview -->
+            <div class="border rounded bg-white p-2 mb-3 text-center">
+              <div id="certOverlayStage" class="position-relative d-inline-block w-100" style="max-width: 620px; aspect-ratio: 1.414 / 1; background: #f8fafc; border: 1px dashed #cbd5e1; overflow: hidden;">
+                <img id="certPreviewImg" src="" alt="Certificate Template Preview" class="w-100 h-100 d-none" style="object-fit: contain;">
+                <div id="certBuiltinHint" class="w-100 h-100 d-flex align-items-center justify-content-center text-muted small">
+                  Built-in ACLC Layout (click Preview Sample PDF below to inspect)
+                </div>
+                <div id="certOverlayName" class="position-absolute fw-bold text-nowrap" style="left: 50%; top: 50%; transform: translate(-50%, -50%); color: #1B365D; font-size: 20px; pointer-events: none; text-shadow: 0 0 2px rgba(255,255,255,0.6);">
+                  DELA CRUZ, JUAN R.
+                </div>
+              </div>
+            </div>
+
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <label class="form-label small fw-bold">Name X (%) <span id="lblNameX" class="text-muted">50</span></label>
+                <input type="range" id="certNameX" class="form-range" min="10" max="90" step="0.5" value="50">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label small fw-bold">Name Y (%) <span id="lblNameY" class="text-muted">50</span></label>
+                <input type="range" id="certNameY" class="form-range" min="10" max="90" step="0.5" value="50">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label small fw-bold">Font Size (pt)</label>
+                <input type="number" id="certNameSize" class="form-control form-control-sm" min="14" max="96" value="38">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label small fw-bold">Font Style</label>
+                <select id="certNameFont" class="form-select form-select-sm">
+                  <option value="Helvetica-Bold">Sans-Serif Bold (Helvetica)</option>
+                  <option value="Times-Bold">Serif Bold (Times)</option>
+                  <option value="Courier-Bold">Monospace Bold</option>
+                </select>
+              </div>
+              <div class="col-sm-3">
+                <label class="form-label small fw-bold">Text Color</label>
+                <input type="color" id="certNameColor" class="form-control form-control-sm form-control-color w-100" value="#1B365D">
+              </div>
+              <div class="col-sm-5 d-flex flex-column justify-content-end gap-1">
+                <label class="form-check form-check-inline mb-0">
+                  <input class="form-check-input" type="checkbox" id="certNameUpper" checked>
+                  <span class="form-check-label small">UPPERCASE Name</span>
+                </label>
+                <label class="form-check form-check-inline mb-0">
+                  <input class="form-check-input" type="checkbox" id="certShowSerial" checked>
+                  <span class="form-check-label small">Show Cert ID (bottom-right)</span>
+                </label>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-check mb-1">
+                  <input class="form-check-input" type="checkbox" id="certShowTrack">
+                  <span class="form-check-label small fw-bold">Stamp Course / Strand / Section</span>
+                </label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">Y%</span>
+                  <input type="number" id="certTrackY" class="form-control" min="10" max="95" step="0.5" value="57">
+                  <span class="input-group-text">pt</span>
+                  <input type="number" id="certTrackSize" class="form-control" min="8" max="36" value="15">
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-check mb-1">
+                  <input class="form-check-input" type="checkbox" id="certShowDate">
+                  <span class="form-check-label small fw-bold">Stamp Event Date</span>
+                </label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">Y%</span>
+                  <input type="number" id="certDateY" class="form-control" min="10" max="95" step="0.5" value="63">
+                  <span class="input-group-text">pt</span>
+                  <input type="number" id="certDateSize" class="form-control" min="8" max="32" value="13">
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+              <button type="button" id="btnPreviewSamplePdf" class="btn btn-outline-primary btn-sm fw-bold">Preview Sample PDF</button>
+              <button type="button" id="btnSaveCertSettingsTop" class="btn btn-aclc btn-sm fw-bold">Save Placement &amp; Email Settings</button>
+            </div>
+          </div>
+
+          <!-- Right: Gmail SMTP & Batch Delivery -->
+          <div class="col-lg-5">
+            <h6 class="text-uppercase text-muted fw-bold small mb-2">2. Google Gmail SMTP Settings</h6>
+            <div class="card card-body mb-3">
+              <div class="mb-2">
+                <label class="form-label small fw-bold mb-1">Sender Gmail Address</label>
+                <input type="email" id="smtpUser" class="form-control form-control-sm" placeholder="seminar.committee@gmail.com">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold mb-1">Google 16-Char App Password (SMTP API Code)</label>
+                <div class="input-group input-group-sm">
+                  <input type="password" id="smtpAppPassword" class="form-control" placeholder="Leave blank to keep saved password" autocomplete="new-password">
+                  <button type="button" id="btnToggleSmtpPass" class="btn btn-outline-secondary">Show</button>
+                </div>
+                <div class="form-text small" id="smtpPassStatus">Requires 2-Step Verification enabled in Google Account.</div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold mb-1">Sender Display Name</label>
+                <input type="text" id="smtpFromName" class="form-control form-control-sm" value="ACLC College Seminar Committee">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold mb-1">Email Subject</label>
+                <input type="text" id="certEmailSubject" class="form-control form-control-sm">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-bold mb-1">Email Body</label>
+                <textarea id="certEmailBody" class="form-control form-control-sm" rows="4"></textarea>
+                <div class="form-text small">Placeholders: <code>{full_name}</code>, <code>{event_title}</code>, <code>{event_date}</code>, <code>{venue}</code>, <code>{student_id}</code></div>
+              </div>
+              <div class="input-group input-group-sm mt-1">
+                <input type="email" id="certTestEmailTo" class="form-control" placeholder="Test recipient email">
+                <button type="button" id="btnSendTestCertEmail" class="btn btn-outline-dark fw-bold">Send Test Email</button>
+              </div>
+            </div>
+
+            <h6 class="text-uppercase text-muted fw-bold small mb-2">3. Quality Review &amp; Manual Stash Delivery</h6>
+            <div class="card card-body bg-light">
+              <div class="small text-muted mb-2">
+                Auto-sending is disabled. Review names &amp; near-misses in <strong>/quality</strong>, stash clean certificates, and manually click <strong>Send Stashed Pool</strong>.
+              </div>
+              <div class="d-flex justify-content-between small mb-2">
+                <span>Eligible: <strong id="certSumEligible">0</strong></span>
+                <span class="text-primary">Stashed: <strong id="certSumStaged">0</strong></span>
+                <span class="text-success">Sent: <strong id="certSumSent">0</strong></span>
+                <span class="text-danger">Failed: <strong id="certSumFailed">0</strong></span>
+              </div>
+              <div id="certBatchProgressWrap" class="mb-2 d-none">
+                <div class="progress progress-sm mb-1">
+                  <div id="certBatchProgressBar" class="progress-bar bg-success" style="width: 0%"></div>
+                </div>
+                <div id="certBatchStatusText" class="small text-muted">Idle</div>
+              </div>
+              <div class="d-flex gap-2">
+                <a href="/quality" class="btn btn-success fw-bold flex-fill">Open /quality Review &amp; Send</a>
+                <button type="button" id="btnSaveCertSettingsBottom" class="btn btn-aclc fw-bold">Save Settings</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -790,21 +1146,80 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
   function refreshPreviewIframes() {
+    const savedY = window.scrollY;
+    const restoreScroll = () => {
+      if (Math.abs(window.scrollY - savedY) > 2) {
+        window.scrollTo({ top: savedY, behavior: "instant" });
+      }
+    };
     const projIframe = document.getElementById("previewProjectorIframe");
     const studIframe = document.getElementById("previewStudentIframe");
-    if (projIframe && projIframe.contentWindow) projIframe.contentWindow.location.reload();
-    if (studIframe && studIframe.contentWindow) studIframe.contentWindow.location.reload();
+    if (projIframe && projIframe.getAttribute("src") && projIframe.contentWindow) {
+      projIframe.addEventListener("load", restoreScroll, { once: true });
+      projIframe.contentWindow.location.reload();
+    }
+    if (studIframe && studIframe.getAttribute("src") && studIframe.contentWindow) {
+      studIframe.addEventListener("load", restoreScroll, { once: true });
+      studIframe.contentWindow.location.reload();
+    }
+    setTimeout(restoreScroll, 50);
+    setTimeout(restoreScroll, 250);
   }
 
-  // Event Control: Session + Status State
-  let activeSession = "{{ 'AFTERNOON' if session == 'Afternoon' else 'MORNING' }}";
-  let activeStatus = "{{ 'OUT' if status == 'Time Out' else ('CLOSED' if status == 'Closed' else 'IN') }}";
-
-  async function applyPhaseChange() {
-    let targetPhase = "LOCKED";
-    if (activeStatus !== "CLOSED") {
-      targetPhase = `${activeSession}_${activeStatus}`;
+  // Admin Workspace Tabs + Lazy Iframe Loading
+  function switchAdminTab(tabId) {
+    document.querySelectorAll(".admin-tab-pane").forEach(pane => {
+      pane.classList.toggle("d-none", pane.id !== tabId);
+    });
+    document.querySelectorAll("[data-admin-tab]").forEach(btn => {
+      btn.classList.toggle("active", btn.getAttribute("data-admin-tab") === tabId);
+    });
+    try { sessionStorage.setItem("aclc_admin_tab", tabId); } catch (e) {}
+    if (tabId === "tabDisplay") {
+      ["previewProjectorIframe", "previewStudentIframe"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.getAttribute("src") && el.getAttribute("data-src")) {
+          el.setAttribute("src", el.getAttribute("data-src"));
+        }
+      });
     }
+  }
+
+  document.querySelectorAll("[data-admin-tab]").forEach(btn => {
+    btn.addEventListener("click", function() {
+      switchAdminTab(this.getAttribute("data-admin-tab"));
+    });
+  });
+
+  try {
+    const savedTab = sessionStorage.getItem("aclc_admin_tab");
+    if (savedTab && document.getElementById(savedTab)) {
+      switchAdminTab(savedTab);
+    }
+  } catch (e) {}
+
+  // Event Control: 1-Click Seminar Phase Stepper
+  let activePhase = "{{ phase }}";
+
+  function syncPhaseToggleUI() {
+    document.querySelectorAll(".btn-phase-step").forEach(b => {
+      const ph = b.getAttribute("data-phase");
+      if (ph === activePhase) {
+        if (ph === "MORNING_IN" || ph === "AFTERNOON_IN") {
+          b.className = "btn btn-phase-step btn-success text-white fw-bold";
+        } else if (ph === "MORNING_OUT" || ph === "AFTERNOON_OUT") {
+          b.className = "btn btn-phase-step btn-warning text-dark fw-bold";
+        } else {
+          b.className = "btn btn-phase-step btn-danger text-white fw-bold";
+        }
+      } else {
+        b.className = "btn btn-phase-step btn-outline-secondary";
+      }
+    });
+  }
+
+  async function applyPhaseChange(targetPhase) {
+    activePhase = targetPhase;
     const resp = await fetch("/api/admin/set-phase", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -812,24 +1227,29 @@ document.addEventListener("DOMContentLoaded", function() {
     });
     if (checkAuthRedirect(resp)) return;
     if (resp.ok) {
-      window.location.reload();
+      const data = await resp.json();
+      syncPhaseToggleUI();
+      const activeBadge = document.getElementById("headerActiveStatusBadge");
+      if (activeBadge && data.session && data.event_status) {
+        activeBadge.textContent = `${data.session} · ${data.event_status}`;
+        if (data.event_status === "Time Out") {
+          activeBadge.className = "badge bg-orange text-white fs-4 px-3 py-2";
+        } else if (data.event_status === "Closed") {
+          activeBadge.className = "badge bg-secondary text-white fs-4 px-3 py-2";
+        } else {
+          activeBadge.className = "badge bg-green text-white fs-4 px-3 py-2";
+        }
+      }
+      showToast(`Updated phase: ${data.session || ""} ${data.event_status || targetPhase}`, "success");
+      refreshPreviewIframes();
     } else {
       showToast("Failed to update status.", "danger");
     }
   }
 
-  document.querySelectorAll(".btn-session").forEach(btn => {
+  document.querySelectorAll(".btn-phase-step").forEach(btn => {
     btn.addEventListener("click", function() {
-      activeSession = this.getAttribute("data-session");
-      if (activeStatus === "CLOSED") activeStatus = "IN";
-      applyPhaseChange();
-    });
-  });
-
-  document.querySelectorAll(".btn-status").forEach(btn => {
-    btn.addEventListener("click", function() {
-      activeStatus = this.getAttribute("data-status");
-      applyPhaseChange();
+      applyPhaseChange(this.getAttribute("data-phase"));
     });
   });
 
@@ -872,6 +1292,11 @@ document.addEventListener("DOMContentLoaded", function() {
   const btnTallyEvaluations = document.getElementById("btnTallyEvaluations");
   if (btnTallyEvaluations) {
     btnTallyEvaluations.addEventListener("click", async function() {
+      const draftCntEl = document.getElementById("btnTallyDraftCount");
+      const draftCnt = draftCntEl ? draftCntEl.textContent.trim() : "all";
+      if (!confirm(`Tally and permanently lock ${draftCnt} unsubmitted evaluation draft(s)? Students will no longer be able to edit them.`)) {
+        return;
+      }
       btnTallyEvaluations.disabled = true;
       const origHtml = btnTallyEvaluations.innerHTML;
       btnTallyEvaluations.textContent = "Tallying & Finalizing...";
@@ -990,22 +1415,37 @@ document.addEventListener("DOMContentLoaded", function() {
   // Table Search & Filter
   const tableSearch = document.getElementById("tableSearch");
   const filterLevel = document.getElementById("filterLevel");
+  const filterStatus = document.getElementById("filterStatus");
   const tableBody = document.getElementById("attendeesTableBody");
 
   function filterTable() {
     const q = tableSearch.value.toLowerCase();
     const lvl = filterLevel.value.toLowerCase();
+    const st = filterStatus ? filterStatus.value : "";
     const rows = tableBody.getElementsByTagName("tr");
     for (let row of rows) {
       if (row.id === "emptyTableRow") continue;
       const text = row.innerText.toLowerCase();
       const matchQ = text.includes(q);
       const matchL = lvl === "" || text.includes(lvl);
-      row.style.display = (matchQ && matchL) ? "" : "none";
+      let matchS = true;
+      if (st) {
+        const cells = row.cells;
+        const sidTxt = (cells[0] ? cells[0].innerText : "").trim().toLowerCase();
+        const outTxt = (cells[5] ? cells[5].innerText : "").trim().toLowerCase();
+        const evalTxt = (cells[7] ? cells[7].innerText : "").trim().toLowerCase();
+        const certTxt = (cells[8] ? cells[8].innerText : "").trim().toLowerCase();
+        if (st === "eligible") matchS = certTxt.includes("approved");
+        else if (st === "missing_out") matchS = (outTxt === "-" || outTxt === "--" || outTxt === "—" || certTxt.includes("needs time-out"));
+        else if (st === "eval_pending") matchS = (evalTxt.includes("pending") || evalTxt.includes("in progress"));
+        else if (st === "noid") matchS = sidTxt.startsWith("noid-");
+      }
+      row.style.display = (matchQ && matchL && matchS) ? "" : "none";
     }
   }
   tableSearch.addEventListener("input", filterTable);
   filterLevel.addEventListener("change", filterTable);
+  if (filterStatus) filterStatus.addEventListener("change", filterTable);
 
   function escapeAttr(s) {
     return String(s == null ? "" : s)
@@ -1222,8 +1662,22 @@ document.addEventListener("DOMContentLoaded", function() {
       }
 
       let eligBadge = `<span class="badge bg-secondary-lt">Pending</span>`;
+      let sendCertBtn = "";
       if (a.is_eligible) {
-        eligBadge = `<span class="badge bg-green text-white">Approved</span>`;
+        const es = (a.cert_email_status || "NOT_SENT").toUpperCase();
+        let emailBadge = `<span class="badge bg-secondary-lt mt-1">Not Sent</span>`;
+        if (es === "SENT") {
+          emailBadge = `<span class="badge bg-azure-lt text-azure mt-1">Emailed</span>`;
+        } else if (es === "SENDING") {
+          emailBadge = `<span class="badge bg-warning-lt text-warning mt-1">Sending</span>`;
+        } else if (es === "FAILED") {
+          emailBadge = `<span class="badge bg-danger-lt text-danger mt-1" title="${escapeAttr(a.cert_email_error || 'Email failed')}">Email Failed</span>`;
+        }
+        eligBadge = `<span class="badge bg-green text-white">Approved</span> ${emailBadge}`;
+        sendCertBtn = `<button type="button" class="btn btn-outline-success btn-send-cert"
+          data-id="${escapeAttr(a.student_id)}"
+          data-name="${escapeAttr(a.full_name)}"
+          data-email="${escapeAttr(a.email)}">${es === "SENT" ? "Resend" : "Email Cert"}</button>`;
       } else if (a.attendance_eligible && a.eval_status !== "SUBMITTED") {
         eligBadge = `<span class="badge bg-warning-lt text-warning">Needs Eval</span>`;
       } else if (a.eval_status === "SUBMITTED" && !a.attendance_eligible) {
@@ -1242,6 +1696,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <td>${eligBadge}</td>
         <td class="text-end">
           <div class="btn-group btn-group-sm">
+            ${sendCertBtn}
             <button type="button" class="btn btn-outline-primary btn-view-pass"
                     data-id="${escapeAttr(a.student_id)}"
                     data-name="${escapeAttr(a.full_name)}"
@@ -1319,7 +1774,7 @@ document.addEventListener("DOMContentLoaded", function() {
         const sig = JSON.stringify(payload.attendees.map(a => [
           a.student_id, a.full_name, a.section, a.level,
           a.primary_in_fmt, a.primary_out_fmt, a.primary_duration_min,
-          a.eval_status, a.eval_avg, a.is_eligible, a.attendance_eligible
+          a.eval_status, a.eval_avg, a.is_eligible, a.attendance_eligible, a.cert_email_status
         ]));
         if (sig !== lastAttendeesSig) {
           lastAttendeesSig = sig;
@@ -1346,6 +1801,519 @@ document.addEventListener("DOMContentLoaded", function() {
       refreshKpiStats();
     } else {
       showToast(data.message || "Failed to delete attendee.", "danger");
+    }
+  });
+
+  window.refreshAdminNetworkStatus = async function() {
+    try {
+      const resp = await fetch("/api/admin/network-status");
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.status === "success" && data.network) {
+        const net = data.network;
+        const ssidBadge = document.getElementById("adminNetSsidBadge");
+        const statusPill = document.getElementById("adminNetStatusPill");
+        const ipText = document.getElementById("adminNetIpText");
+        const targetText = document.getElementById("adminNetTargetText");
+        
+        if (ssidBadge) {
+          ssidBadge.textContent = net.active_ssid;
+          ssidBadge.className = "badge fs-4 fw-bold " + (net.is_event_wifi ? "bg-green text-white" : "bg-warning text-dark");
+        }
+        if (statusPill) {
+          statusPill.textContent = net.is_event_wifi
+            ? "Connected to Event Network"
+            : (net.qr_mismatch ? `Wi-Fi QR Mismatch (QR: ${net.target_ssid})` : "Not on Target Event Wi-Fi");
+          statusPill.className = "badge fs-5 fw-bold " + (net.is_event_wifi ? "bg-green-lt text-green" : "bg-warning-lt text-dark");
+        }
+        if (ipText) ipText.textContent = `${net.lan_ip}:${net.port}`;
+        if (targetText) targetText.textContent = net.target_ssid;
+      }
+    } catch(e) {}
+  };
+
+  window.adminTriggerConnectWifi = async function() {
+    const btn = document.getElementById("btnAdminQuickConnect");
+    const origText = btn ? btn.textContent : "";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Connecting...";
+    }
+    try {
+      const resp = await fetch("/api/admin/network-connect", { method: "POST" });
+      const data = await resp.json();
+      if (data.status === "success") {
+        showToast(data.message || "Connected to Event Wi-Fi!", "success");
+      } else {
+        showToast(data.message || "Failed to switch Wi-Fi.", "danger");
+      }
+    } catch(e) {
+      showToast("Error triggering Wi-Fi connection.", "danger");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = origText;
+      }
+      setTimeout(refreshAdminNetworkStatus, 1500);
+    }
+  };
+
+  // Real-Time Quiz / Evaluation Editor
+  let adminQuizSchema = {{ eval_quiz_schema | tojson }};
+  const quizEditorSectionsEl = document.getElementById("quizEditorSections");
+
+  function renderAdminQuizEditor() {
+    if (!quizEditorSectionsEl) return;
+    const parts = [
+      { key: "part1", title: "Part I. Evaluation of the Seminar" },
+      { key: "part2", title: "Part II. Learning Outcomes" },
+      { key: "part3", title: "Part III. Overall Assessment" }
+    ];
+    quizEditorSectionsEl.innerHTML = parts.map(p => {
+      const items = adminQuizSchema[p.key] || [];
+      const rowsHtml = items.map((item, idx) => `
+        <div class="d-flex align-items-center gap-2 mb-2 quiz-editor-row" data-part="${p.key}" data-idx="${idx}">
+          <input type="checkbox" class="form-check-input mt-0 quiz-q-enabled" ${item.enabled !== false ? "checked" : ""} title="Show/Hide question">
+          <span class="badge ${item.type === 'rating' ? 'bg-blue-lt text-aclc-blue' : 'bg-purple-lt text-purple'}">${item.type === 'rating' ? '1-5' : 'Text'}</span>
+          <input type="text" class="form-control form-control-sm quiz-q-text" value="${escapeAttr(item.text)}" maxlength="500">
+          ${String(item.id || "").startsWith("c_") ? `<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 btn-del-quiz-q" data-part="${p.key}" data-idx="${idx}">Del</button>` : ""}
+        </div>
+      `).join("");
+      return `
+        <div class="mb-4">
+          <h5 class="fw-bold text-hiv-crimson border-bottom pb-1 mb-2">${p.title}</h5>
+          ${rowsHtml || '<div class="text-muted small">No questions in this section.</div>'}
+        </div>
+      `;
+    }).join("");
+
+    quizEditorSectionsEl.querySelectorAll(".btn-del-quiz-q").forEach(btn => {
+      btn.addEventListener("click", function() {
+        syncInputsToAdminQuizSchema();
+        const part = this.getAttribute("data-part");
+        const idx = parseInt(this.getAttribute("data-idx"), 10);
+        if (adminQuizSchema[part]) {
+          adminQuizSchema[part].splice(idx, 1);
+          renderAdminQuizEditor();
+        }
+      });
+    });
+  }
+
+  function syncInputsToAdminQuizSchema() {
+    if (!quizEditorSectionsEl) return;
+    quizEditorSectionsEl.querySelectorAll(".quiz-editor-row").forEach(row => {
+      const part = row.getAttribute("data-part");
+      const idx = parseInt(row.getAttribute("data-idx"), 10);
+      const item = adminQuizSchema[part] && adminQuizSchema[part][idx];
+      if (!item) return;
+      const chk = row.querySelector(".quiz-q-enabled");
+      const txt = row.querySelector(".quiz-q-text");
+      if (chk) item.enabled = chk.checked;
+      if (txt) item.text = txt.value.trim() || item.text;
+    });
+  }
+
+  const modalQuizEditorEl = document.getElementById("modalQuizEditor");
+  if (modalQuizEditorEl) {
+    modalQuizEditorEl.addEventListener("show.bs.modal", renderAdminQuizEditor);
+  }
+
+  const newQSectionEl = document.getElementById("newQSection");
+  const newQTypeEl = document.getElementById("newQType");
+  if (newQSectionEl && newQTypeEl) {
+    newQSectionEl.addEventListener("change", function() {
+      newQTypeEl.value = this.value === "part1" ? "rating" : "text";
+    });
+  }
+
+  const btnAddQuizQuestion = document.getElementById("btnAddQuizQuestion");
+  if (btnAddQuizQuestion) {
+    btnAddQuizQuestion.addEventListener("click", function() {
+      syncInputsToAdminQuizSchema();
+      const part = newQSectionEl ? newQSectionEl.value : "part1";
+      const qtype = newQTypeEl ? newQTypeEl.value : "rating";
+      const txtEl = document.getElementById("newQText");
+      const qtext = txtEl ? txtEl.value.trim() : "";
+      if (!qtext) {
+        showToast("Please enter a question text first.", "warning");
+        if (txtEl) txtEl.focus();
+        return;
+      }
+      if (!adminQuizSchema[part]) adminQuizSchema[part] = [];
+      adminQuizSchema[part].push({
+        id: "c_" + Math.random().toString(36).slice(2, 10),
+        type: qtype,
+        text: qtext,
+        enabled: true
+      });
+      if (txtEl) txtEl.value = "";
+      renderAdminQuizEditor();
+    });
+  }
+
+  const btnSaveQuizSchema = document.getElementById("btnSaveQuizSchema");
+  if (btnSaveQuizSchema) {
+    btnSaveQuizSchema.addEventListener("click", async function() {
+      syncInputsToAdminQuizSchema();
+      btnSaveQuizSchema.disabled = true;
+      btnSaveQuizSchema.textContent = "Pushing Live...";
+      try {
+        const resp = await fetch("/api/admin/evaluation/schema", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(adminQuizSchema)
+        });
+        const data = await resp.json();
+        if (resp.ok && data.status === "success") {
+          adminQuizSchema = data.schema;
+          window.closeModalById("modalQuizEditor");
+          showToast("Quiz updated and pushed live to students!", "success");
+        } else {
+          showToast(data.detail || "Failed to save quiz.", "danger");
+        }
+      } catch(e) {
+        showToast("Network error saving quiz.", "danger");
+      } finally {
+        btnSaveQuizSchema.disabled = false;
+        btnSaveQuizSchema.textContent = "Save & Push Live";
+      }
+    });
+  }
+
+  const btnResetQuizSchema = document.getElementById("btnResetQuizSchema");
+  if (btnResetQuizSchema) {
+    btnResetQuizSchema.addEventListener("click", async function() {
+      if (!confirm("Reset all quiz questions back to the default template?")) return;
+      try {
+        const resp = await fetch("/api/admin/evaluation/schema/reset", { method: "POST" });
+        const data = await resp.json();
+        if (resp.ok && data.status === "success") {
+          adminQuizSchema = data.schema;
+          renderAdminQuizEditor();
+          showToast("Quiz reset to default and pushed live.", "success");
+        }
+      } catch(e) {
+        showToast("Failed to reset quiz.", "danger");
+      }
+    });
+  }
+
+  (function initClearAllHandler() {
+    const modalEl = document.getElementById("modalClearAllData");
+    const inputClear = document.getElementById("inputClearAllConfirm");
+    const btnClear = document.getElementById("btnConfirmClearAll");
+    if (inputClear && btnClear) {
+      inputClear.addEventListener("input", function() {
+        btnClear.disabled = inputClear.value.trim().toUpperCase() !== "CLEAR ALL";
+      });
+      if (modalEl) {
+        modalEl.addEventListener("show.bs.modal", function() {
+          inputClear.value = "";
+          btnClear.disabled = true;
+        });
+      }
+      btnClear.addEventListener("click", async function() {
+        btnClear.disabled = true;
+        btnClear.textContent = "Clearing...";
+        try {
+          const resp = await fetch("/api/admin/clear-all", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirm_text: inputClear.value.trim() })
+          });
+          if (checkAuthRedirect(resp)) return;
+          const data = await resp.json();
+          if (resp.ok && data.status === "success") {
+            window.closeModalById("modalClearAllData");
+            await refreshKpiStats();
+            if (typeof pollAdminLiveFeed === "function") await pollAdminLiveFeed();
+            showToast(data.message || "All test data cleared.", "success");
+          } else {
+            showToast(data.message || "Failed to clear data.", "danger");
+          }
+        } catch (e) {
+          showToast("Network error clearing data.", "danger");
+        } finally {
+          btnClear.textContent = "Clear All Data";
+          btnClear.disabled = inputClear.value.trim().toUpperCase() !== "CLEAR ALL";
+        }
+      });
+    }
+  })();
+
+  // =====================================================================
+  // CERTIFICATE STUDIO & GMAIL SMTP DELIVERY
+  // =====================================================================
+  let certBatchPollTimer = null;
+
+  function updateCertOverlayPreview() {
+    const x = parseFloat(document.getElementById("certNameX").value || "50");
+    const y = parseFloat(document.getElementById("certNameY").value || "50");
+    const sizePt = parseFloat(document.getElementById("certNameSize").value || "38");
+    const color = document.getElementById("certNameColor").value || "#1B365D";
+    const font = document.getElementById("certNameFont").value || "Helvetica-Bold";
+    const upper = document.getElementById("certNameUpper").checked;
+
+    document.getElementById("lblNameX").textContent = x;
+    document.getElementById("lblNameY").textContent = y;
+
+    const overlay = document.getElementById("certOverlayName");
+    overlay.style.left = `${x}%`;
+    overlay.style.top = `${y}%`;
+    overlay.style.color = color;
+    overlay.style.fontSize = `${Math.max(11, Math.round(sizePt * 0.58))}px`;
+    overlay.style.fontFamily = font.includes("Times") ? "Georgia, serif" : (font.includes("Courier") ? "monospace" : "sans-serif");
+    overlay.textContent = upper ? "DELA CRUZ, JUAN R." : "Dela Cruz, Juan R.";
+  }
+
+  ["certNameX", "certNameY", "certNameSize", "certNameColor", "certNameFont", "certNameUpper"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", updateCertOverlayPreview);
+    if (el) el.addEventListener("change", updateCertOverlayPreview);
+  });
+
+  function renderCertBatchStatus(batch) {
+    if (!batch) return;
+    const sum = batch.summary || {};
+    document.getElementById("certSumEligible").textContent = sum.eligible_total ?? 0;
+    document.getElementById("certSumStaged").textContent = sum.staged ?? 0;
+    document.getElementById("certSumSent").textContent = sum.sent ?? 0;
+    document.getElementById("certSumFailed").textContent = sum.failed ?? 0;
+
+    const wrap = document.getElementById("certBatchProgressWrap");
+    const bar = document.getElementById("certBatchProgressBar");
+    const txt = document.getElementById("certBatchStatusText");
+
+    if (batch.running) {
+      wrap.classList.remove("d-none");
+      const pct = batch.total > 0 ? Math.round((batch.processed / batch.total) * 100) : 0;
+      bar.style.width = `${pct}%`;
+      txt.textContent = `Sending ${batch.processed} / ${batch.total} (Sent: ${batch.sent}, Failed: ${batch.failed})...`;
+    } else {
+      if (batch.total > 0) {
+        wrap.classList.remove("d-none");
+        bar.style.width = "100%";
+        txt.textContent = `Finished: ${batch.sent} sent, ${batch.failed} failed${batch.last_error ? " (" + batch.last_error + ")" : ""}`;
+      }
+      if (certBatchPollTimer) {
+        clearInterval(certBatchPollTimer);
+        certBatchPollTimer = null;
+        refreshKpiStats();
+      }
+    }
+  }
+
+  async function pollCertBatchStatus() {
+    try {
+      const resp = await fetch("/api/admin/certificate/batch-status");
+      if (!resp.ok) return;
+      const data = await resp.json();
+      renderCertBatchStatus(data);
+    } catch (e) {}
+  }
+
+  async function loadCertStudioSettings() {
+    const resp = await fetch("/api/admin/certificate/settings");
+    if (checkAuthRedirect(resp)) return;
+    if (!resp.ok) return;
+    const s = await resp.json();
+
+    document.getElementById("certNameX").value = s.cert_name_x_pct ?? 50;
+    document.getElementById("certNameY").value = s.cert_name_y_pct ?? 50;
+    document.getElementById("certNameSize").value = s.cert_name_font_size ?? 38;
+    document.getElementById("certNameColor").value = s.cert_name_color || "#1B365D";
+    document.getElementById("certNameUpper").checked = !!s.cert_name_uppercase;
+    document.getElementById("certNameFont").value = s.cert_name_font || "Helvetica-Bold";
+    document.getElementById("certShowTrack").checked = !!s.cert_show_track;
+    document.getElementById("certTrackY").value = s.cert_track_y_pct ?? 57;
+    document.getElementById("certTrackSize").value = s.cert_track_font_size ?? 15;
+    document.getElementById("certShowDate").checked = !!s.cert_show_date;
+    document.getElementById("certDateY").value = s.cert_date_y_pct ?? 63;
+    document.getElementById("certDateSize").value = s.cert_date_font_size ?? 13;
+    document.getElementById("certShowSerial").checked = !!s.cert_show_serial;
+
+    document.getElementById("smtpUser").value = s.smtp_user || "";
+    document.getElementById("smtpAppPassword").value = "";
+    document.getElementById("smtpPassStatus").textContent = s.smtp_password_set
+      ? "App Password is saved. Leave blank to keep it."
+      : "Requires 2-Step Verification enabled in Google Account.";
+    document.getElementById("smtpFromName").value = s.smtp_from_name || "ACLC College Seminar Committee";
+    document.getElementById("certEmailSubject").value = s.cert_email_subject || "";
+    document.getElementById("certEmailBody").value = s.cert_email_body || "";
+    if (!document.getElementById("certTestEmailTo").value && s.smtp_user) {
+      document.getElementById("certTestEmailTo").value = s.smtp_user;
+    }
+
+    const previewImg = document.getElementById("certPreviewImg");
+    const builtinHint = document.getElementById("certBuiltinHint");
+    const statusText = document.getElementById("certTemplateStatusText");
+    if (s.has_template) {
+      previewImg.src = `/api/admin/certificate/template-image?t=${Date.now()}`;
+      previewImg.classList.remove("d-none");
+      builtinHint.classList.add("d-none");
+      statusText.textContent = "Custom Canva template active. Drag sliders to align the name on your design.";
+    } else {
+      previewImg.classList.add("d-none");
+      builtinHint.classList.remove("d-none");
+      statusText.textContent = "Using built-in ACLC layout. Upload your Canva PNG/JPG export to use your custom design.";
+    }
+
+    updateCertOverlayPreview();
+    renderCertBatchStatus(s.batch);
+    if (s.batch && s.batch.running && !certBatchPollTimer) {
+      certBatchPollTimer = setInterval(pollCertBatchStatus, 1500);
+    }
+  }
+
+  async function saveCertStudioSettings() {
+    const payload = {
+      cert_auto_send: false,
+      cert_name_x_pct: parseFloat(document.getElementById("certNameX").value || "50"),
+      cert_name_y_pct: parseFloat(document.getElementById("certNameY").value || "50"),
+      cert_name_font_size: parseFloat(document.getElementById("certNameSize").value || "38"),
+      cert_name_color: document.getElementById("certNameColor").value || "#1B365D",
+      cert_name_uppercase: document.getElementById("certNameUpper").checked,
+      cert_name_font: document.getElementById("certNameFont").value || "Helvetica-Bold",
+      cert_show_track: document.getElementById("certShowTrack").checked,
+      cert_track_y_pct: parseFloat(document.getElementById("certTrackY").value || "57"),
+      cert_track_font_size: parseFloat(document.getElementById("certTrackSize").value || "15"),
+      cert_show_date: document.getElementById("certShowDate").checked,
+      cert_date_y_pct: parseFloat(document.getElementById("certDateY").value || "63"),
+      cert_date_font_size: parseFloat(document.getElementById("certDateSize").value || "13"),
+      cert_show_serial: document.getElementById("certShowSerial").checked,
+      smtp_user: document.getElementById("smtpUser").value.trim(),
+      smtp_app_password: document.getElementById("smtpAppPassword").value.trim(),
+      smtp_from_name: document.getElementById("smtpFromName").value.trim(),
+      cert_email_subject: document.getElementById("certEmailSubject").value,
+      cert_email_body: document.getElementById("certEmailBody").value,
+    };
+    const resp = await fetch("/api/admin/certificate/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (checkAuthRedirect(resp)) return false;
+    const data = await resp.json();
+    if (resp.ok) {
+      showToast(data.message || "Certificate settings saved.", "success");
+      await loadCertStudioSettings();
+      return true;
+    }
+    showToast(data.detail || "Failed to save settings.", "danger");
+    return false;
+  }
+
+  const certModalEl = document.getElementById("certStudioModal");
+  if (certModalEl) {
+    certModalEl.addEventListener("show.bs.modal", loadCertStudioSettings);
+  }
+
+  ["btnSaveCertSettingsTop", "btnSaveCertSettingsBottom"].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener("click", saveCertStudioSettings);
+  });
+
+  document.getElementById("btnUploadCertTemplate").addEventListener("click", async function() {
+    const fileInput = document.getElementById("certTemplateFile");
+    if (!fileInput.files || !fileInput.files[0]) {
+      showToast("Please select a PNG or JPG exported from Canva first.", "warning");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", fileInput.files[0]);
+    this.disabled = true;
+    try {
+      const resp = await fetch("/api/admin/certificate/upload-template", { method: "POST", body: fd });
+      if (checkAuthRedirect(resp)) return;
+      const data = await resp.json();
+      if (resp.ok) {
+        showToast(data.message || "Canva template uploaded.", "success");
+        await loadCertStudioSettings();
+      } else {
+        showToast(data.detail || "Failed to upload template.", "danger");
+      }
+    } finally {
+      this.disabled = false;
+    }
+  });
+
+  document.getElementById("btnResetCertTemplate").addEventListener("click", async function() {
+    const resp = await fetch("/api/admin/certificate/template", { method: "DELETE" });
+    if (checkAuthRedirect(resp)) return;
+    if (resp.ok) {
+      showToast("Reverted to built-in ACLC certificate layout.", "success");
+      await loadCertStudioSettings();
+    }
+  });
+
+  document.getElementById("btnPreviewSamplePdf").addEventListener("click", async function() {
+    await saveCertStudioSettings();
+    window.open(`/api/admin/certificate/preview?t=${Date.now()}`, "_blank");
+  });
+
+  document.getElementById("btnSendTestCertEmail").addEventListener("click", async function() {
+    const toEmail = document.getElementById("certTestEmailTo").value.trim();
+    if (!toEmail) {
+      showToast("Enter a test recipient email address.", "warning");
+      return;
+    }
+    this.disabled = true;
+    this.textContent = "Sending...";
+    try {
+      const saved = await saveCertStudioSettings();
+      if (!saved) return;
+      const resp = await fetch("/api/admin/certificate/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to_email: toEmail })
+      });
+      if (checkAuthRedirect(resp)) return;
+      const data = await resp.json();
+      showToast(data.message || "Done", data.status === "success" ? "success" : "danger");
+    } finally {
+      this.disabled = false;
+      this.textContent = "Send Test Email";
+    }
+  });
+
+  const btnToggleSmtpPass = document.getElementById("btnToggleSmtpPass");
+  if (btnToggleSmtpPass) {
+    btnToggleSmtpPass.addEventListener("click", function() {
+      const inp = document.getElementById("smtpAppPassword");
+      if (inp.type === "password") {
+        inp.type = "text";
+        this.textContent = "Hide";
+      } else {
+        inp.type = "password";
+        this.textContent = "Show";
+      }
+    });
+  }
+
+  // Per-row Email Cert / Resend button
+  document.addEventListener("click", async function(e) {
+    const btn = e.target.closest(".btn-send-cert");
+    if (!btn) return;
+    const sid = btn.getAttribute("data-id");
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+    try {
+      const resp = await fetch("/api/admin/certificate/send-one", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: sid, force: true })
+      });
+      if (checkAuthRedirect(resp)) return;
+      const data = await resp.json();
+      showToast(data.message || "Done", data.status === "success" ? "success" : "danger");
+      await refreshKpiStats();
+    } catch (err) {
+      showToast("Network error sending certificate.", "danger");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = origText;
     }
   });
 

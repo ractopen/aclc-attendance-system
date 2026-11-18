@@ -1,10 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
     <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
     <title>{% block title %}HIV Awareness Seminar | ACLC Evaluation & Attendance{% endblock %}</title>
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem("aclc_theme");
+          var theme = (saved === "dark") ? "dark" : "light";
+          document.documentElement.setAttribute("data-bs-theme", theme);
+        } catch (e) {
+          document.documentElement.setAttribute("data-bs-theme", "light");
+        }
+      })();
+    </script>
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico"/>
     <link rel="icon" type="image/png" href="/static/img/aclc-logo.png"/>
@@ -81,6 +92,182 @@
       input[type="number"] {
         -moz-appearance: textfield !important;
         appearance: textfield !important;
+      }
+
+      /* Cross-browser CSS fallbacks for older Android Chrome / WebViews (Chrome < 123)
+         where oklch(), color-mix(), light-dark(), and unprefixed mask-image fail. */
+      :root,
+      [data-bs-theme="light"] {
+        color-scheme: light;
+        --tblr-body-bg: #f8fafc;
+        --tblr-body-color: #1e293b;
+        --tblr-card-bg: #ffffff;
+        --tblr-card-color: #1e293b;
+        --tblr-card-border-color: #e2e8f0;
+        --tblr-border-color: #cbd5e1;
+        --tblr-border-color-translucent: rgba(15, 23, 42, 0.12);
+        --tblr-muted: #64748b;
+        --tblr-secondary-color: #64748b;
+        --tblr-bg-surface: #ffffff;
+        --tblr-bg-surface-secondary: #f1f5f9;
+        --tblr-primary: #0A3981;
+      }
+      body {
+        background-color: #f8fafc;
+        color: #1e293b;
+      }
+      .card {
+        position: relative;
+        background-color: #ffffff;
+        color: #1e293b;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+      }
+      .card-header {
+        background-color: #ffffff;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      /* Replace Tabler's mask-image .card-status-top (breaks on Chrome < 120) */
+      .card-status-top {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: auto !important;
+        inset: 0 0 auto 0 !important;
+        height: 3px !important;
+        -webkit-mask-image: none !important;
+        mask-image: none !important;
+        border-top-left-radius: 8px !important;
+        border-top-right-radius: 8px !important;
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        pointer-events: none;
+      }
+      .form-label {
+        color: #1e293b;
+        font-weight: 500;
+      }
+      .form-control,
+      .form-select {
+        background-color: #ffffff;
+        color: #1e293b;
+        border: 1px solid #cbd5e1;
+      }
+      .form-control:focus,
+      .form-select:focus {
+        background-color: #ffffff;
+        color: #1e293b;
+        border-color: #0A3981;
+      }
+      .btn-outline-primary {
+        color: #0A3981;
+        border: 1px solid #0A3981;
+        background-color: #ffffff;
+      }
+      .btn-outline-primary:hover {
+        color: #ffffff;
+        background-color: #0A3981;
+        border-color: #0A3981;
+      }
+      .btn-check:checked + .btn-outline-primary,
+      .btn-outline-primary.active {
+        color: #ffffff !important;
+        background-color: #0A3981 !important;
+        border-color: #0A3981 !important;
+      }
+      .btn-outline-secondary {
+        color: #475569;
+        border: 1px solid #cbd5e1;
+        background-color: #ffffff;
+      }
+      .modal-content {
+        background-color: #ffffff;
+        color: #1e293b;
+        border: 1px solid #cbd5e1;
+      }
+      .list-group-item {
+        background-color: #ffffff;
+        color: #1e293b;
+        border-color: #e2e8f0;
+      }
+      .text-muted { color: #64748b !important; }
+      .text-dark { color: #1e293b !important; }
+
+      /* Explicit Dark Mode Theme */
+      [data-bs-theme="dark"] {
+        color-scheme: dark;
+        --tblr-body-bg: #0f172a;
+        --tblr-body-color: #e2e8f0;
+        --tblr-card-bg: #1e293b;
+        --tblr-card-color: #e2e8f0;
+        --tblr-card-border-color: #334155;
+        --tblr-border-color: #475569;
+        --tblr-border-color-translucent: rgba(255, 255, 255, 0.12);
+        --tblr-muted: #94a3b8;
+        --tblr-secondary-color: #94a3b8;
+        --tblr-bg-surface: #1e293b;
+        --tblr-bg-surface-secondary: #0f172a;
+      }
+      [data-bs-theme="dark"] body,
+      [data-bs-theme="dark"] .bg-slate-50 {
+        background-color: #0f172a !important;
+        color: #e2e8f0 !important;
+      }
+      [data-bs-theme="dark"] .card,
+      [data-bs-theme="dark"] .card-header,
+      [data-bs-theme="dark"] .modal-content,
+      [data-bs-theme="dark"] .list-group-item {
+        background-color: #1e293b !important;
+        color: #e2e8f0 !important;
+        border-color: #334155 !important;
+      }
+      [data-bs-theme="dark"] .bg-white {
+        background-color: #1e293b !important;
+        color: #e2e8f0 !important;
+      }
+      [data-bs-theme="dark"] .bg-light {
+        background-color: #0f172a !important;
+        color: #e2e8f0 !important;
+        border-color: #334155 !important;
+      }
+      [data-bs-theme="dark"] .form-label,
+      [data-bs-theme="dark"] .text-dark {
+        color: #f1f5f9 !important;
+      }
+      [data-bs-theme="dark"] .text-muted {
+        color: #94a3b8 !important;
+      }
+      [data-bs-theme="dark"] .text-aclc-blue {
+        color: #60a5fa !important;
+      }
+      [data-bs-theme="dark"] .form-control,
+      [data-bs-theme="dark"] .form-select {
+        background-color: #0f172a !important;
+        color: #f1f5f9 !important;
+        border-color: #475569 !important;
+      }
+      [data-bs-theme="dark"] .form-control::placeholder {
+        color: #64748b !important;
+      }
+      [data-bs-theme="dark"] .btn-outline-primary {
+        color: #93c5fd;
+        border-color: #3b82f6;
+        background-color: #0f172a;
+      }
+      [data-bs-theme="dark"] .btn-outline-secondary {
+        color: #cbd5e1;
+        border-color: #475569;
+        background-color: #0f172a;
+      }
+      [data-bs-theme="dark"] .pass-qr-card {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #e2e8f0 !important;
+      }
+      [data-bs-theme="dark"] .pass-qr-card.pass-approved {
+        background: linear-gradient(180deg, #1e293b 0%, #052e16 100%) !important;
+        border-color: #16a34a !important;
       }
     </style>
     {% block extra_head %}{% endblock %}

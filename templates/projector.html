@@ -86,7 +86,7 @@
             <img id="wifiQrImage" src="/api/qr/wifi" alt="Wi-Fi QR Code" width="250" height="250" class="img-fluid rounded">
           </div>
           <div class="text-white fw-bold fs-3" id="wifiSsidLabel">
-            {{ wifi_ssid or 'Event_Attendance' }}
+            {{ wifi_ssid or 'HIV Awareness Attendance' }}
           </div>
           <div class="text-white-50 small" id="wifiPassLabel">
             {% if wifi_password %}Password: <span class="font-monospace text-warning fw-bold">{{ wifi_password }}</span>{% else %}Open Network (No Password){% endif %}
@@ -138,7 +138,7 @@ document.addEventListener("DOMContentLoaded", function() {
   setInterval(updateClock, 1000);
   updateClock();
 
-  let lastWifiSig = "{{ (wifi_ssid or 'Event_Attendance') ~ '|' ~ (wifi_password or '') }}";
+  let lastWifiSig = "{{ (wifi_ssid or 'HIV Awareness Attendance') ~ '|' ~ (wifi_password or '') }}";
   let lastFormUrl = "{{ kiosk_url or base_url }}";
 
   // Background real-time sync with admin settings
@@ -222,7 +222,7 @@ document.addEventListener("DOMContentLoaded", function() {
           wifiPassLabel.textContent = "Open Network (No Password)";
         }
       }
-      const curWifiSig = `${data.wifi_ssid || 'Event_Attendance'}|${data.wifi_password || ''}`;
+      const curWifiSig = `${data.wifi_ssid || 'HIV Awareness Attendance'}|${data.wifi_password || ''}`;
       if (curWifiSig !== lastWifiSig) {
         lastWifiSig = curWifiSig;
         if (wifiQrImage) wifiQrImage.src = "/api/qr/wifi?t=" + Date.now();

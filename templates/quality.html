@@ -1,0 +1,478 @@
+{% extends "base.html" %}
+{% block title %}Quality Check &amp; Stash Pool - {{ event_title }}{% endblock %}
+
+{% block content %}
+<div class="container-xl py-4">
+  <!-- Header -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+    <div>
+      <div class="text-muted small text-uppercase fw-bold">Final Human Check Before Emailing</div>
+      <h1 class="h2 fw-bold text-aclc-blue mb-0">{{ event_title }} &mdash; Certificate Quality Check</h1>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="/admin" class="btn btn-outline-secondary fw-bold">Back to Admin</a>
+      <a href="/api/export/certificate-delivery-csv" class="btn btn-outline-success fw-bold">Download Delivery CSV Report</a>
+      <button type="button" id="btnStashAllClean" class="btn btn-aclc fw-bold">Approve All Clean</button>
+      <button type="button" id="btnSendStagedPool" class="btn btn-success fw-bold">Send Ready List Now</button>
+    </div>
+  </div>
+
+  <!-- Plain-English 3-Step Guide -->
+  <div class="card card-body bg-light mb-3 py-2 px-3">
+    <div class="row g-2 small">
+      <div class="col-md-4">
+        <strong class="text-aclc-blue">Step 1: Check Names &amp; Near-Misses</strong>
+        <div class="text-muted">Review flagged/troll names, preview long names as PDF, or rescue students who were only a few minutes short.</div>
+      </div>
+      <div class="col-md-4">
+        <strong class="text-aclc-blue">Step 2: Approve for Sending</strong>
+        <div class="text-muted">Click <strong>Approve</strong> (or <strong>Approve All Clean</strong>) to save verified students into the Ready List. Click <strong>Hold</strong> to skip anyone suspicious.</div>
+      </div>
+      <div class="col-md-4">
+        <strong class="text-aclc-blue">Step 3: Send When Online</strong>
+        <div class="text-muted">Nothing sends automatically. Once this host laptop has internet (e.g. Phone USB Tethering), click <strong>Send Ready List Now</strong>.</div>
+      </div>
+    </div>
+  </div>
+
+  {% if not smtp_configured %}
+  <div class="alert alert-warning mb-3">
+    Gmail SMTP is not configured yet. You can review, fix names, and stash certificates now, then configure Gmail App Password in <a href="/admin" class="fw-bold">Admin &rarr; Certificate Studio &amp; SMTP</a> before sending.
+  </div>
+  {% endif %}
+
+  <!-- KPI Summary -->
+  <div class="row g-3 mb-3">
+    <div class="col-md-2 col-6">
+      <div class="card card-body py-2 px-3">
+        <div class="text-muted small text-uppercase fw-bold">Needs Check</div>
+        <div class="fs-2 fw-bold text-dark" id="qKpiPending">0</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-6">
+      <div class="card card-body py-2 px-3 border-primary">
+        <div class="text-muted small text-uppercase fw-bold">Ready to Send</div>
+        <div class="fs-2 fw-bold text-aclc-blue" id="qKpiStaged">0</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-6">
+      <div class="card card-body py-2 px-3">
+        <div class="text-muted small text-uppercase fw-bold">On Hold (Skipped)</div>
+        <div class="fs-2 fw-bold text-warning" id="qKpiHeld">0</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-6">
+      <div class="card card-body py-2 px-3">
+        <div class="text-muted small text-uppercase fw-bold">Sent (No Error)</div>
+        <div class="fs-2 fw-bold text-success" id="qKpiSent">0</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-6">
+      <div class="card card-body py-2 px-3">
+        <div class="text-muted small text-uppercase fw-bold">Failed</div>
+        <div class="fs-2 fw-bold text-danger" id="qKpiFailed">0</div>
+      </div>
+    </div>
+    <div class="col-md-2 col-6">
+      <div class="card card-body py-2 px-3">
+        <div class="text-muted small text-uppercase fw-bold">Near-Miss Pool</div>
+        <div class="fs-2 fw-bold text-azure" id="qKpiNearMiss">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Batch Progress -->
+  <div id="qBatchWrap" class="card card-body mb-3 d-none">
+    <div class="d-flex justify-content-between small fw-bold mb-1">
+      <span>Stashed Pool Email Delivery</span>
+      <span id="qBatchText">Idle</span>
+    </div>
+    <div class="progress progress-sm">
+      <div id="qBatchBar" class="progress-bar bg-success" style="width: 0%"></div>
+    </div>
+  </div>
+
+  <!-- Near-Miss / Grace Period Rescue Pool -->
+  <div class="card mb-4">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <h3 class="card-title fw-bold mb-0">Near-Miss Grace Pool (e.g., 2 mins short of {{ min_duration }} min)</h3>
+        <div class="text-muted small">Attendees just shy of eligibility. Human reviewers can approve and stash them into the send pool.</div>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="small fw-bold text-nowrap mb-0">Grace Window (min):</label>
+        <input type="number" id="graceMinutesInput" class="form-control form-control-sm" style="width: 80px;" value="10" min="1" max="120">
+        <button type="button" id="btnRefreshQuality" class="btn btn-sm btn-outline-primary fw-bold">Refresh</button>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table table-sm">
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Full Name</th>
+            <th>Section</th>
+            <th>Duration</th>
+            <th>Reason / Shortfall</th>
+            <th class="text-end">Human Action</th>
+          </tr>
+        </thead>
+        <tbody id="nearMissBody">
+          <tr><td colspan="6" class="text-center text-muted py-3">Loading near-miss candidates...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Eligible Attendees Quality Review Table -->
+  <div class="card">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div class="btn-group btn-group-sm" role="group" id="qFilterGroup">
+        <button type="button" class="btn btn-aclc q-filter-btn" data-filter="ALL">All</button>
+        <button type="button" class="btn btn-outline-secondary q-filter-btn" data-filter="FLAGGED">Flagged / Long Name</button>
+        <button type="button" class="btn btn-outline-secondary q-filter-btn" data-filter="PENDING_REVIEW">Needs Check</button>
+        <button type="button" class="btn btn-outline-secondary q-filter-btn" data-filter="STAGED">Ready to Send</button>
+        <button type="button" class="btn btn-outline-secondary q-filter-btn" data-filter="HELD">On Hold</button>
+        <button type="button" class="btn btn-outline-secondary q-filter-btn" data-filter="SENT_OR_FAILED">Sent / Failed</button>
+      </div>
+      <input type="text" id="qSearchInput" class="form-control form-control-sm" style="max-width: 260px;" placeholder="Search ID, name, or email...">
+    </div>
+    <div class="table-responsive">
+      <table class="table table-vcenter card-table">
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Recipient Name &amp; Email</th>
+            <th>Quality Check</th>
+            <th>Pool Status</th>
+            <th>Email Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="qualityTableBody">
+          <tr><td colspan="6" class="text-center text-muted py-4">Loading quality queue...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Inline Quick-Fix Modal -->
+<div class="modal fade" id="modalQuickFix" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Fix Attendee Name / Email</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="qfStudentId">
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Last Name</label>
+            <input type="text" id="qfLastName" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">First Name</label>
+            <input type="text" id="qfFirstName" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Middle Name</label>
+            <input type="text" id="qfMiddleName" class="form-control form-control-sm">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-bold">Email Address</label>
+            <input type="email" id="qfEmail" class="form-control form-control-sm">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btnSaveQuickFix" class="btn btn-aclc btn-sm fw-bold">Save Fix</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  let qualityData = { eligible: [], near_miss: [], summary: {}, batch: {} };
+  let activeFilter = "ALL";
+  let batchTimer = null;
+
+  function esc(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function showMsg(msg, type = "success") {
+    let c = document.getElementById("qToastBox");
+    if (!c) {
+      c = document.createElement("div");
+      c.id = "qToastBox";
+      c.style.cssText = "position:fixed;bottom:20px;right:20px;z-index:9999;max-width:360px;";
+      document.body.appendChild(c);
+    }
+    const el = document.createElement("div");
+    el.className = `alert alert-${type} shadow-sm mb-2 py-2 px-3`;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+
+  function renderBatch(batch) {
+    if (!batch) return;
+    const wrap = document.getElementById("qBatchWrap");
+    const bar = document.getElementById("qBatchBar");
+    const txt = document.getElementById("qBatchText");
+    const btn = document.getElementById("btnSendStagedPool");
+    if (batch.running) {
+      wrap.classList.remove("d-none");
+      const pct = batch.total > 0 ? Math.round((batch.processed / batch.total) * 100) : 0;
+      bar.style.width = `${pct}%`;
+      txt.textContent = `Sending ${batch.processed} / ${batch.total} (Sent: ${batch.sent}, Failed: ${batch.failed})`;
+      btn.disabled = true;
+      btn.textContent = "Sending Pool...";
+    } else {
+      btn.disabled = false;
+      btn.textContent = "Send Ready List Now";
+      if (batch.total > 0) {
+        wrap.classList.remove("d-none");
+        bar.style.width = "100%";
+        txt.textContent = `Finished: ${batch.sent} sent, ${batch.failed} failed${batch.last_error ? " (" + batch.last_error + ")" : ""}`;
+      }
+      if (batchTimer) {
+        clearInterval(batchTimer);
+        batchTimer = null;
+        loadQualityData();
+      }
+    }
+  }
+
+  function renderTables() {
+    const s = qualityData.summary || {};
+    document.getElementById("qKpiPending").textContent = s.pending_review ?? 0;
+    document.getElementById("qKpiStaged").textContent = s.staged ?? 0;
+    document.getElementById("qKpiHeld").textContent = s.held ?? 0;
+    document.getElementById("qKpiSent").textContent = s.sent ?? 0;
+    document.getElementById("qKpiFailed").textContent = s.failed ?? 0;
+    document.getElementById("qKpiNearMiss").textContent = s.near_miss_count ?? 0;
+
+    // Near-miss table
+    const nmBody = document.getElementById("nearMissBody");
+    if (!qualityData.near_miss || qualityData.near_miss.length === 0) {
+      nmBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No near-miss attendees within the grace window.</td></tr>`;
+    } else {
+      nmBody.innerHTML = qualityData.near_miss.map(nm => `
+        <tr>
+          <td class="font-monospace fw-bold">${esc(nm.student_id)}</td>
+          <td class="fw-bold">${esc(nm.full_name)}</td>
+          <td><span class="badge bg-secondary-lt">${esc(nm.section)}</span></td>
+          <td>${esc(nm.duration_min)} min</td>
+          <td class="text-warning fw-bold small">${esc(nm.reason)}</td>
+          <td class="text-end">
+            <button type="button" class="btn btn-sm btn-outline-success fw-bold btn-rescue" data-id="${esc(nm.student_id)}">
+              Approve &amp; Add
+            </button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    // Eligible quality table
+    const q = (document.getElementById("qSearchInput").value || "").trim().toLowerCase();
+    const filtered = (qualityData.eligible || []).filter(a => {
+      if (q) {
+        const hay = `${a.student_id} ${a.full_name} ${a.email} ${a.section}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (activeFilter === "FLAGGED") return a.quality.severity !== "clean";
+      if (activeFilter === "PENDING_REVIEW") return a.cert_quality_status === "PENDING_REVIEW";
+      if (activeFilter === "STAGED") return a.cert_quality_status === "STAGED";
+      if (activeFilter === "HELD") return a.cert_quality_status === "HELD";
+      if (activeFilter === "SENT_OR_FAILED") return a.cert_email_status === "SENT" || a.cert_email_status === "FAILED";
+      return true;
+    });
+
+    const tbody = document.getElementById("qualityTableBody");
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">No attendees match the current filter.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(a => {
+      let qBadges = `<span class="badge bg-green-lt text-green">Clean (${a.quality.name_length} chars, ${Math.round(a.quality.fitted_font_pt)}pt)</span>`;
+      if (a.quality.flags && a.quality.flags.length > 0) {
+        qBadges = a.quality.flags.map(f => {
+          const cls = f.level === "critical" ? "bg-danger-lt text-danger" : "bg-warning-lt text-warning";
+          return `<div class="badge ${cls} d-block text-start mb-1">${esc(f.msg)}</div>`;
+        }).join("");
+      }
+
+      let poolBadge = `<span class="badge bg-secondary-lt">Needs Check</span>`;
+      if (a.cert_quality_status === "STAGED") poolBadge = `<span class="badge bg-primary text-white">Ready to Send</span>`;
+      else if (a.cert_quality_status === "HELD") poolBadge = `<span class="badge bg-warning text-dark">On Hold</span>`;
+
+      let emailBadge = `<span class="badge bg-secondary-lt">Not Sent</span>`;
+      if (a.cert_email_status === "SENT") emailBadge = `<span class="badge bg-green text-white">Sent</span>`;
+      else if (a.cert_email_status === "SENDING") emailBadge = `<span class="badge bg-warning-lt text-warning">Sending</span>`;
+      else if (a.cert_email_status === "FAILED") emailBadge = `<span class="badge bg-danger text-white" title="${esc(a.cert_email_error)}">Failed</span>`;
+
+      return `
+        <tr>
+          <td class="font-monospace fw-bold">${esc(a.student_id)}</td>
+          <td>
+            <div class="fw-bold">${esc(a.full_name)}</div>
+            <div class="small text-muted">${esc(a.email)} &middot; ${esc(a.section)} (${esc(a.duration_min)} min)</div>
+          </td>
+          <td>${qBadges}</td>
+          <td>${poolBadge}</td>
+          <td>${emailBadge}</td>
+          <td class="text-end">
+            <div class="btn-group btn-group-sm">
+              <a href="/api/admin/certificate/preview-attendee?student_id=${encodeURIComponent(a.student_id)}" target="_blank" class="btn btn-outline-primary">Preview PDF</a>
+              <button type="button" class="btn btn-outline-secondary btn-quick-fix"
+                      data-id="${esc(a.student_id)}"
+                      data-ln="${esc(a.last_name)}"
+                      data-fn="${esc(a.first_name)}"
+                      data-mn="${esc(a.middle_name)}"
+                      data-email="${esc(a.email)}">Fix</button>
+              <button type="button" class="btn btn-outline-success btn-set-qstatus" data-id="${esc(a.student_id)}" data-qs="STAGED">Approve</button>
+              <button type="button" class="btn btn-outline-warning btn-set-qstatus" data-id="${esc(a.student_id)}" data-qs="HELD">Hold</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  async function loadQualityData() {
+    const grace = parseFloat(document.getElementById("graceMinutesInput").value || "10");
+    const resp = await fetch(`/api/admin/quality/data?grace_minutes=${encodeURIComponent(grace)}`);
+    if (resp.status === 401) { window.location.href = "/admin/login?next=/quality"; return; }
+    if (!resp.ok) return;
+    qualityData = await resp.json();
+    renderTables();
+    renderBatch(qualityData.batch);
+    if (qualityData.batch && qualityData.batch.running && !batchTimer) {
+      batchTimer = setInterval(pollBatch, 1500);
+    }
+  }
+
+  async function pollBatch() {
+    const resp = await fetch("/api/admin/certificate/batch-status");
+    if (!resp.ok) return;
+    const b = await resp.json();
+    renderBatch(b);
+  }
+
+  document.querySelectorAll(".q-filter-btn").forEach(btn => {
+    btn.addEventListener("click", function() {
+      activeFilter = this.getAttribute("data-filter");
+      document.querySelectorAll(".q-filter-btn").forEach(b => {
+        b.className = b === this ? "btn btn-aclc q-filter-btn" : "btn btn-outline-secondary q-filter-btn";
+      });
+      renderTables();
+    });
+  });
+
+  document.getElementById("qSearchInput").addEventListener("input", renderTables);
+  document.getElementById("btnRefreshQuality").addEventListener("click", loadQualityData);
+
+  document.getElementById("btnStashAllClean").addEventListener("click", async function() {
+    const resp = await fetch("/api/admin/quality/stash-all-clean", { method: "POST" });
+    const data = await resp.json();
+    showMsg(data.message || "Stashed clean certificates.", resp.ok ? "success" : "danger");
+    await loadQualityData();
+  });
+
+  document.getElementById("btnSendStagedPool").addEventListener("click", async function() {
+    const resp = await fetch("/api/admin/certificate/send-staged", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ include_failed: true })
+    });
+    const data = await resp.json();
+    if (data.status === "started" || data.status === "busy") {
+      showMsg(data.message, "success");
+      if (!batchTimer) batchTimer = setInterval(pollBatch, 1500);
+      await pollBatch();
+    } else {
+      showMsg(data.message || "Nothing to send.", data.status === "empty" ? "warning" : "danger");
+    }
+  });
+
+  document.addEventListener("click", async function(e) {
+    const rescueBtn = e.target.closest(".btn-rescue");
+    if (rescueBtn) {
+      const sid = rescueBtn.getAttribute("data-id");
+      const resp = await fetch("/api/admin/quality/rescue-near-miss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: sid })
+      });
+      const data = await resp.json();
+      showMsg(data.message || "Approved & stashed.", resp.ok ? "success" : "danger");
+      await loadQualityData();
+      return;
+    }
+
+    const qsBtn = e.target.closest(".btn-set-qstatus");
+    if (qsBtn) {
+      const sid = qsBtn.getAttribute("data-id");
+      const qs = qsBtn.getAttribute("data-qs");
+      const resp = await fetch("/api/admin/quality/set-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: sid, quality_status: qs })
+      });
+      if (resp.ok) {
+        showMsg(`Marked ${sid} as ${qs}.`, "success");
+        await loadQualityData();
+      }
+      return;
+    }
+
+    const fixBtn = e.target.closest(".btn-quick-fix");
+    if (fixBtn) {
+      document.getElementById("qfStudentId").value = fixBtn.getAttribute("data-id");
+      document.getElementById("qfLastName").value = fixBtn.getAttribute("data-ln");
+      document.getElementById("qfFirstName").value = fixBtn.getAttribute("data-fn");
+      document.getElementById("qfMiddleName").value = fixBtn.getAttribute("data-mn");
+      document.getElementById("qfEmail").value = fixBtn.getAttribute("data-email");
+      new bootstrap.Modal(document.getElementById("modalQuickFix")).show();
+    }
+  });
+
+  document.getElementById("btnSaveQuickFix").addEventListener("click", async function() {
+    const payload = {
+      student_id: document.getElementById("qfStudentId").value,
+      last_name: document.getElementById("qfLastName").value,
+      first_name: document.getElementById("qfFirstName").value,
+      middle_name: document.getElementById("qfMiddleName").value,
+      email: document.getElementById("qfEmail").value,
+    };
+    const resp = await fetch("/api/admin/quality/quick-fix", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      bootstrap.Modal.getInstance(document.getElementById("modalQuickFix")).hide();
+      showMsg(data.message || "Updated attendee.", "success");
+      await loadQualityData();
+    } else {
+      showMsg(data.detail || data.message || "Failed to update.", "danger");
+    }
+  });
+
+  loadQualityData();
+});
+</script>
+{% endblock %}

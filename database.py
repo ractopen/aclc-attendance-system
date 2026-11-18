@@ -2,6 +2,7 @@ import sqlite3
 import os
 import json
 import re
+import secrets
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
@@ -120,6 +121,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS attendees (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id TEXT UNIQUE NOT NULL,
+        id_type TEXT DEFAULT 'Student ID Number',
         last_name TEXT NOT NULL,
         first_name TEXT NOT NULL,
         middle_name TEXT DEFAULT 'N/A',
@@ -145,6 +147,11 @@ def init_db():
         eval_status TEXT DEFAULT 'PENDING',
         is_eligible INTEGER DEFAULT 0,
         cert_status TEXT DEFAULT 'PENDING',
+        cert_quality_status TEXT DEFAULT 'PENDING_REVIEW',
+        cert_file_path TEXT DEFAULT '',
+        cert_email_status TEXT DEFAULT 'NOT_SENT',
+        cert_emailed_at TIMESTAMP,
+        cert_email_error TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
@@ -155,6 +162,26 @@ def init_db():
         cursor.execute("ALTER TABLE attendees ADD COLUMN attendance_eligible INTEGER DEFAULT 0;")
     if "eval_status" not in existing_cols:
         cursor.execute("ALTER TABLE attendees ADD COLUMN eval_status TEXT DEFAULT 'PENDING';")
+    if "id_type" not in existing_cols:
+        cursor.execute("ALTER TABLE attendees ADD COLUMN id_type TEXT DEFAULT 'Student ID Number';")
+    if "cert_quality_status" not in existing_cols:
+        cursor.execute("ALTER TABLE attendees ADD COLUMN cert_quality_status TEXT DEFAULT 'PENDING_REVIEW';")
+    if "cert_file_path" not in existing_cols:
+        cursor.execute("ALTER TABLE attendees ADD COLUMN cert_file_path TEXT DEFAULT '';")
+    if "cert_email_status" not in existing_cols:
+        cursor.execute("ALTER TABLE attendees ADD COLUMN cert_email_status TEXT DEFAULT 'NOT_SENT';")
+    if "cert_emailed_at" not in existing_cols:
+        cursor.execute("ALTER TABLE attendees ADD COLUMN cert_emailed_at TIMESTAMP;")
+    if "cert_email_error" not in existing_cols:
+        cursor.execute("ALTER TABLE attendees ADD COLUMN cert_email_error TEXT DEFAULT '';")
+
+    # Recover any rows left in SENDING state if the server crashed mid-send
+    cursor.execute("""
+        UPDATE attendees
+        SET cert_email_status = 'FAILED',
+            cert_email_error = 'Interrupted by server restart; ready to retry.'
+        WHERE cert_email_status = 'SENDING'
+    """)
     
     # Evaluations table (Per-Account Seminar Evaluation Form with Auto-Save & Session Lock)
     cursor.execute("""
@@ -220,12 +247,32 @@ def init_db():
         "venue": "ACLC College of Mandaue",
         "kiosk_announcement": "Welcome to the HIV Awareness Seminar! Please Time In, complete the Seminar Evaluation Form when opened, and scan your pass for Time Out.",
         "terms_and_conditions": "1. Attendance Verification: Attendees must record their Time-In upon arrival and Time-Out prior to leaving.\n2. Minimum Duration & Evaluation: To qualify for the official Certificate of Participation, attendees must complete at least 2 hours and 30 minutes (150 mins) of active attendance AND submit the HIV Awareness Seminar Evaluation Form.\n3. Certificate Accuracy: Ensure your Student ID, Full Name, and Email address are entered accurately.\n4. Respect & Non-Discrimination: Participants must maintain a respectful, safe, and non-discriminatory environment.",
-        "wifi_ssid": "Event_Attendance",
+        "wifi_ssid": "HIV Awareness Attendance",
         "wifi_password": "",
         "kiosk_url": "",
         "proj_show_form_qr": "1",
         "proj_show_wifi_qr": "1",
-        "proj_announcement": "Welcome to the HIV Awareness Seminar! Connect to Wi-Fi and Scan QR to record attendance and access your evaluation form."
+        "proj_announcement": "Welcome to the HIV Awareness Seminar! Connect to Wi-Fi and Scan QR to record attendance and access your evaluation form.",
+        "cert_auto_send": "0",
+        "cert_template_path": "",
+        "cert_name_x_pct": "50.0",
+        "cert_name_y_pct": "50.0",
+        "cert_name_font_size": "38",
+        "cert_name_color": "#1B365D",
+        "cert_name_uppercase": "1",
+        "cert_name_font": "Helvetica-Bold",
+        "cert_show_track": "0",
+        "cert_track_y_pct": "57.0",
+        "cert_track_font_size": "15",
+        "cert_show_date": "0",
+        "cert_date_y_pct": "63.0",
+        "cert_date_font_size": "13",
+        "cert_show_serial": "1",
+        "smtp_user": "",
+        "smtp_app_password": "",
+        "smtp_from_name": "ACLC College Seminar Committee",
+        "cert_email_subject": "Your Certificate of Participation - {event_title}",
+        "cert_email_body": "Dear {full_name},\n\nThank you for actively participating in the {event_title} held on {event_date} at {venue}.\n\nAttached is your official Certificate of Participation (PDF).\n\nBest regards,\n{from_name}"
     }
     
     for key, val in default_settings.items():
@@ -341,21 +388,50 @@ def recompute_all_attendees_eligibility(min_duration: float):
     conn.commit()
     conn.close()
 
+def generate_fallback_student_id(cursor: sqlite3.Cursor) -> str:
+    """Generate a unique temporary pass ID for attendees without an ID number."""
+    for _ in range(16):
+        candidate = f"NOID-{secrets.token_hex(3).upper()}"
+        exists = cursor.execute(
+            "SELECT 1 FROM attendees WHERE UPPER(student_id) = ?", (candidate,)
+        ).fetchone()
+        if not exists:
+            return candidate
+    return f"NOID-{int(datetime.now().timestamp())}"
+
+
 def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", device_info: str = "") -> Dict[str, Any]:
     conn = get_db()
     cursor = conn.cursor()
     now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Normalize ID and names
-    student_id = data["student_id"].strip().upper()
-    last_name = data["last_name"].strip()
-    first_name = data["first_name"].strip()
+    # Normalize ID and names (reuse existing NOID pass or generate a new one if ID is blank)
+    raw_student_id = (data.get("student_id") or "").strip().upper()
+    last_name = " ".join(data["last_name"].strip().split())
+    first_name = " ".join(data["first_name"].strip().split())
+    section = " ".join(data["section"].strip().split())
+    email = data["email"].strip()
+    if raw_student_id:
+        student_id = raw_student_id
+    else:
+        existing_noid = cursor.execute(
+            """
+            SELECT student_id FROM attendees
+            WHERE UPPER(TRIM(last_name)) = ? AND UPPER(TRIM(first_name)) = ?
+              AND (
+                (LENGTH(TRIM(?)) > 0 AND UPPER(TRIM(email)) = ?)
+                OR (student_id LIKE 'NOID-%' AND UPPER(TRIM(section)) = ?)
+              )
+            LIMIT 1
+            """,
+            (last_name.upper(), first_name.upper(), email, email.upper(), section.upper())
+        ).fetchone()
+        student_id = existing_noid["student_id"] if existing_noid else generate_fallback_student_id(cursor)
+    id_type = (data.get("id_type") or "Student ID Number").strip() or "Student ID Number"
     raw_middle = (data.get("middle_name") or "").strip()
     middle_name = "N/A" if (not raw_middle or raw_middle.upper() in ("N/A", "NA", "NONE", "-")) else raw_middle
     full_name = compute_full_name(last_name, first_name, middle_name)
     sex = data["sex"].strip()
-    section = data["section"].strip()
-    email = data["email"].strip()
     level = normalize_level(data["level"])
     shs_grade, strand, college_year, course = infer_academic_details(
         level, section,
@@ -365,6 +441,33 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
     
     # Check if student exists
     row = cursor.execute("SELECT * FROM attendees WHERE UPPER(student_id) = ?", (student_id,)).fetchone()
+    if row and raw_student_id:
+        existing_ln = " ".join((row["last_name"] or "").strip().split()).upper()
+        existing_fn = " ".join((row["first_name"] or "").strip().split()).upper()
+        if existing_ln != last_name.upper() or existing_fn != first_name.upper():
+            conn.close()
+            return {
+                "status": "error",
+                "message": f"ID '{student_id}' is already registered to another attendee. Please check your ID number or leave it blank for a temporary Pass ID."
+            }
+    elif not row and raw_student_id and email:
+        # Upgrade an earlier NOID- pass for the same person (same name + email) to their real Student ID
+        noid_row = cursor.execute(
+            """
+            SELECT * FROM attendees
+            WHERE student_id LIKE 'NOID-%'
+              AND UPPER(TRIM(last_name)) = ?
+              AND UPPER(TRIM(first_name)) = ?
+              AND UPPER(TRIM(email)) = ?
+            LIMIT 1
+            """,
+            (last_name.upper(), first_name.upper(), email.upper())
+        ).fetchone()
+        if noid_row:
+            old_noid = noid_row["student_id"]
+            cursor.execute("UPDATE attendees SET student_id = ? WHERE student_id = ?", (student_id, old_noid))
+            cursor.execute("UPDATE evaluations SET student_id = ? WHERE UPPER(student_id) = ?", (student_id, old_noid.upper()))
+            row = cursor.execute("SELECT * FROM attendees WHERE UPPER(student_id) = ?", (student_id,)).fetchone()
     
     if phase == "MORNING_IN":
         if row:
@@ -384,13 +487,13 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
                 }
             cursor.execute("""
                 UPDATE attendees SET
-                    last_name = ?, first_name = ?, middle_name = ?, full_name = ?,
+                    id_type = ?, last_name = ?, first_name = ?, middle_name = ?, full_name = ?,
                     sex = ?, age = ?, email = ?, level = ?,
                     shs_grade = ?, strand = ?, college_year = ?, course = ?, section = ?,
                     ip_address = ?, device_info = ?, morning_in = ?
                 WHERE student_id = ?
             """, (
-                last_name, first_name, middle_name, full_name,
+                id_type, last_name, first_name, middle_name, full_name,
                 sex, data["age"], email, level,
                 shs_grade, strand, college_year, course, section,
                 ip_address, device_info, now_iso, student_id
@@ -398,13 +501,13 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
         else:
             cursor.execute("""
                 INSERT INTO attendees (
-                    student_id, last_name, first_name, middle_name, full_name,
+                    student_id, id_type, last_name, first_name, middle_name, full_name,
                     sex, age, email, level,
                     shs_grade, strand, college_year, course, section,
                     ip_address, device_info, morning_in
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                student_id, last_name, first_name, middle_name, full_name,
+                student_id, id_type, last_name, first_name, middle_name, full_name,
                 sex, data["age"], email, level,
                 shs_grade, strand, college_year, course, section,
                 ip_address, device_info, now_iso
@@ -427,13 +530,13 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
                 }
             cursor.execute("""
                 UPDATE attendees SET
-                    last_name = ?, first_name = ?, middle_name = ?, full_name = ?,
+                    id_type = ?, last_name = ?, first_name = ?, middle_name = ?, full_name = ?,
                     sex = ?, age = ?, email = ?, level = ?,
                     shs_grade = ?, strand = ?, college_year = ?, course = ?, section = ?,
                     ip_address = ?, device_info = ?, afternoon_in = ?
                 WHERE student_id = ?
             """, (
-                last_name, first_name, middle_name, full_name,
+                id_type, last_name, first_name, middle_name, full_name,
                 sex, data["age"], email, level,
                 shs_grade, strand, college_year, course, section,
                 ip_address, device_info, now_iso, student_id
@@ -441,13 +544,13 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
         else:
             cursor.execute("""
                 INSERT INTO attendees (
-                    student_id, last_name, first_name, middle_name, full_name,
+                    student_id, id_type, last_name, first_name, middle_name, full_name,
                     sex, age, email, level,
                     shs_grade, strand, college_year, course, section,
                     ip_address, device_info, afternoon_in
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                student_id, last_name, first_name, middle_name, full_name,
+                student_id, id_type, last_name, first_name, middle_name, full_name,
                 sex, data["age"], email, level,
                 shs_grade, strand, college_year, course, section,
                 ip_address, device_info, now_iso
@@ -465,6 +568,7 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
         "time_fmt": format_time_str(now_iso),
         "student_name": full_name,
         "student_id": student_id,
+        "id_type": id_type,
         "section": section,
         "eval_status": row["eval_status"] if row else "PENDING",
         "is_eligible": bool(row["is_eligible"]) if row else False,
@@ -591,6 +695,87 @@ def register_time_out(student_id: str, phase: str, min_duration: float, ip_addre
     }
 
 # =====================================================================
+# =====================================================================
+# DYNAMIC QUIZ / EVALUATION SCHEMA (REAL-TIME ADMIN EDITOR)
+# =====================================================================
+
+DEFAULT_EVAL_QUIZ_SCHEMA: Dict[str, List[Dict[str, Any]]] = {
+    "part1": [
+        {"id": "q1_1", "type": "rating", "text": "1. The objectives of the HIV Awareness Seminar were clearly presented.", "enabled": True},
+        {"id": "q1_2", "type": "rating", "text": "2. The speaker demonstrated sufficient knowledge of HIV and related topics.", "enabled": True},
+        {"id": "q1_3", "type": "rating", "text": "3. The information presented was accurate, relevant, and easy to understand.", "enabled": True},
+        {"id": "q1_4", "type": "rating", "text": "4. The seminar provided a clear understanding of HIV, its transmission, and prevention.", "enabled": True},
+        {"id": "q1_5", "type": "rating", "text": "5. The discussion addressed common misconceptions and stigma surrounding HIV.", "enabled": True},
+        {"id": "q1_6", "type": "rating", "text": "6. The speaker encouraged active participation and interaction.", "enabled": True},
+        {"id": "q1_7", "type": "rating", "text": "7. The seminar increased my awareness of HIV prevention and testing.", "enabled": True},
+        {"id": "q1_8", "type": "rating", "text": "8. The seminar helped me understand the importance of respect and non-discrimination toward people living with HIV.", "enabled": True},
+        {"id": "q1_9", "type": "rating", "text": "9. The materials and presentations supported my understanding of the topic.", "enabled": True},
+        {"id": "q1_10", "type": "rating", "text": "10. Overall, the seminar was informative and beneficial.", "enabled": True},
+    ],
+    "part2": [
+        {"id": "q2_1", "type": "text", "text": "1. What important information did you learn from the HIV Awareness Seminar?", "enabled": True},
+        {"id": "q2_2", "type": "text", "text": "2. What misconception about HIV was clarified during the seminar?", "enabled": True},
+        {"id": "q2_3", "type": "text", "text": "3. How will you apply the knowledge you gained from the seminar in your daily life?", "enabled": True},
+    ],
+    "part3": [
+        {"id": "q3_1", "type": "text", "text": "1. What part of the seminar did you find most helpful?", "enabled": True},
+        {"id": "q3_2", "type": "text", "text": "2. What topics related to HIV awareness would you like to learn more about?", "enabled": True},
+        {"id": "q3_3", "type": "text", "text": "3. What suggestions do you have to improve future seminars?", "enabled": True},
+    ],
+}
+
+
+def get_eval_quiz_schema() -> Dict[str, List[Dict[str, Any]]]:
+    """Returns the active evaluation quiz schema from settings, or default copy."""
+    raw = get_setting("eval_quiz_schema", "")
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict) and all(k in parsed for k in ("part1", "part2", "part3")):
+                return parsed
+        except Exception:
+            pass
+    return json.loads(json.dumps(DEFAULT_EVAL_QUIZ_SCHEMA))
+
+
+def save_eval_quiz_schema(raw_schema: Dict[str, Any]) -> Tuple[Dict[str, List[Dict[str, Any]]], int]:
+    """Sanitizes, saves, and versions the evaluation quiz schema for real-time sync."""
+    clean_schema: Dict[str, List[Dict[str, Any]]] = {"part1": [], "part2": [], "part3": []}
+    for part_key, default_type in (("part1", "rating"), ("part2", "text"), ("part3", "text")):
+        items = raw_schema.get(part_key) or []
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            qid = re.sub(r"[^a-zA-Z0-9_]", "", str(item.get("id") or ""))[:40]
+            if not qid:
+                qid = f"c_{secrets.token_hex(4)}"
+            qtype = item.get("type") if item.get("type") in ("rating", "text") else default_type
+            qtext = re.sub(r"[<>]", "", str(item.get("text") or "")).strip()[:500]
+            if not qtext:
+                continue
+            qenabled = bool(item.get("enabled", True))
+            clean_schema[part_key].append({
+                "id": qid,
+                "type": qtype,
+                "text": qtext,
+                "enabled": qenabled,
+            })
+
+    set_setting("eval_quiz_schema", json.dumps(clean_schema))
+    cur_ver = int(float(get_setting("eval_quiz_version", "1") or "1"))
+    new_ver = cur_ver + 1
+    set_setting("eval_quiz_version", str(new_ver))
+    return clean_schema, new_ver
+
+
+def reset_eval_quiz_schema() -> Tuple[Dict[str, List[Dict[str, Any]]], int]:
+    """Restores the default evaluation quiz schema and bumps version."""
+    return save_eval_quiz_schema(DEFAULT_EVAL_QUIZ_SCHEMA)
+
+
+# =====================================================================
 # SEMINAR EVALUATION FORM: LOCKING, AUTO-SAVE, SUBMIT & TALLY FUNCTIONS
 # =====================================================================
 
@@ -622,11 +807,32 @@ def _sanitize_draft_payload(raw_draft: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 clean[k] = ""
 
+    # Preserve custom real-time added questions (c_*)
+    custom_ratings = []
+    custom_answered = 0
+    for k, val in raw_draft.items():
+        if isinstance(k, str) and k.startswith("c_") and re.match(r"^c_[a-zA-Z0-9_]{1,38}$", k):
+            if val is not None and str(val).strip() != "":
+                if isinstance(val, int) or (isinstance(val, str) and val.strip().isdigit() and 1 <= int(val.strip()) <= 5):
+                    iv = int(val)
+                    if 1 <= iv <= 5:
+                        clean[k] = iv
+                        custom_ratings.append(iv)
+                        custom_answered += 1
+                        continue
+                s = re.sub(r"[<>]", "", str(val)).strip()[:2000]
+                clean[k] = s
+                if s:
+                    custom_answered += 1
+            else:
+                clean[k] = ""
+
     ratings = [clean[f"q1_{i}"] for i in range(1, 11) if clean.get(f"q1_{i}") is not None]
-    clean["q1_avg"] = round(sum(ratings) / len(ratings), 2) if ratings else 0.0
+    all_ratings = ratings + custom_ratings
+    clean["q1_avg"] = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0.0
     clean["answered_count"] = len(ratings) + sum(
         1 for part in (2, 3) for j in range(1, 4) if clean.get(f"q{part}_{j}", "").strip() != ""
-    )
+    ) + custom_answered
     return clean
 
 def _is_lock_active(lock_expires_at: Optional[str], now: datetime) -> Tuple[bool, int]:
@@ -1423,13 +1629,14 @@ def get_sections_list() -> List[str]:
 def admin_manual_add_attendee(data: Dict[str, Any]) -> Dict[str, Any]:
     conn = get_db()
     cursor = conn.cursor()
-    student_id = data["student_id"].strip().upper()
+    raw_sid = (data.get("student_id") or "").strip().upper()
+    student_id = raw_sid if raw_sid else generate_fallback_student_id(cursor)
     last_name = data["last_name"].strip()
     first_name = data["first_name"].strip()
     middle_name = (data.get("middle_name") or "N/A").strip()
     full_name = compute_full_name(last_name, first_name, middle_name)
     sex = data["sex"].strip()
-    age = int(data["age"])
+    age = max(10, min(120, int(data["age"])))
     email = data["email"].strip().lower()
     level = normalize_level(data["level"])
     section = data["section"].strip()
@@ -1479,8 +1686,8 @@ def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]
     middle_name = (data.get("middle_name") or row["middle_name"] or "N/A").strip()
     full_name = compute_full_name(last_name, first_name, middle_name)
     sex = data.get("sex", row["sex"]).strip()
-    age = int(data.get("age", row["age"]))
-    email = data.get("email", row["email"]).strip()
+    age = max(10, min(120, int(data.get("age", row["age"]))))
+    email = data.get("email", row["email"]).strip().lower()
     level = normalize_level(data.get("level", row["level"]))
     section = data.get("section", row["section"]).strip()
     shs_grade, strand, college_year, course = infer_academic_details(
@@ -1490,12 +1697,19 @@ def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]
         data.get("college_year") or row["college_year"],
         data.get("course") or row["course"]
     )
-    morning_in = data.get("morning_in") if data.get("morning_in") is not None else row["morning_in"]
-    morning_out = data.get("morning_out") if data.get("morning_out") is not None else row["morning_out"]
-    afternoon_in = data.get("afternoon_in") if data.get("afternoon_in") is not None else row["afternoon_in"]
-    afternoon_out = data.get("afternoon_out") if data.get("afternoon_out") is not None else row["afternoon_out"]
+    def _clean_ts(val, fallback):
+        if val is None:
+            return fallback
+        s = str(val).strip()
+        return s if s else None
+
+    morning_in = _clean_ts(data.get("morning_in"), row["morning_in"])
+    morning_out = _clean_ts(data.get("morning_out"), row["morning_out"])
+    afternoon_in = _clean_ts(data.get("afternoon_in"), row["afternoon_in"])
+    afternoon_out = _clean_ts(data.get("afternoon_out"), row["afternoon_out"])
     eval_status = (data.get("eval_status") or row["eval_status"] or "PENDING").strip().upper()
-    is_eligible = int(data.get("is_eligible", row["is_eligible"]))
+    explicit_eligible = data.get("is_eligible")
+    is_eligible = int(explicit_eligible) if explicit_eligible is not None else int(row["is_eligible"] or 0)
 
     # Recompute durations if both in and out are present; reset to 0 if out was cleared
     m_dur = 0.0
@@ -1519,10 +1733,24 @@ def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]
     min_dur = float(get_setting("min_duration_minutes", "150") or "150")
     has_timeout = bool(morning_out or afternoon_out)
     att_eligible = 1 if (has_timeout and (m_dur + a_dur) >= min_dur) else 0
-    if is_eligible == 1:
+    if att_eligible == 1 and eval_status == "SUBMITTED" and explicit_eligible != 0:
+        is_eligible = 1
+        cert_status = "APPROVED"
+    elif is_eligible == 1:
         cert_status = "APPROVED" if (att_eligible == 1 and eval_status == "SUBMITTED") else "MANUAL_APPROVED"
     else:
         cert_status = "PENDING"
+
+    identity_changed = (
+        full_name != row["full_name"]
+        or level != row["level"]
+        or section != row["section"]
+        or email != row["email"]
+    )
+    email_changed = (email != row["email"])
+    new_cert_file_path = "" if identity_changed else (row["cert_file_path"] or "")
+    new_cert_email_status = "NOT_SENT" if email_changed else (row["cert_email_status"] or "NOT_SENT")
+    new_cert_email_error = "" if email_changed else (row["cert_email_error"] or "")
 
     cursor.execute("""
         UPDATE attendees SET
@@ -1531,7 +1759,8 @@ def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]
             shs_grade = ?, strand = ?, college_year = ?, course = ?, section = ?,
             morning_in = ?, morning_out = ?, morning_duration_min = ?,
             afternoon_in = ?, afternoon_out = ?, afternoon_duration_min = ?,
-            attendance_eligible = ?, eval_status = ?, is_eligible = ?, cert_status = ?
+            attendance_eligible = ?, eval_status = ?, is_eligible = ?, cert_status = ?,
+            cert_file_path = ?, cert_email_status = ?, cert_email_error = ?
         WHERE UPPER(student_id) = ?
     """, (
         last_name, first_name, middle_name, full_name,
@@ -1539,11 +1768,17 @@ def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]
         shs_grade, strand, college_year, course, section,
         morning_in, morning_out, m_dur,
         afternoon_in, afternoon_out, a_dur,
-        att_eligible, eval_status, is_eligible, cert_status, sid
+        att_eligible, eval_status, is_eligible, cert_status,
+        new_cert_file_path, new_cert_email_status, new_cert_email_error, sid
     ))
     conn.commit()
     conn.close()
-    return {"status": "success", "message": f"Updated record for {full_name}."}
+    return {
+        "status": "success",
+        "message": f"Updated record for {full_name}.",
+        "is_eligible": bool(is_eligible),
+        "cert_status": cert_status,
+    }
 
 def admin_delete_attendee(student_id: str) -> Dict[str, Any]:
     conn = get_db()
@@ -1559,3 +1794,257 @@ def admin_delete_attendee(student_id: str) -> Dict[str, Any]:
     conn.commit()
     conn.close()
     return {"status": "success", "message": f"Deleted attendee record for {name} ({sid})."}
+
+
+def admin_clear_all_data() -> Dict[str, Any]:
+    """Deletes all attendees and evaluation records while preserving event settings."""
+    conn = get_db()
+    cursor = conn.cursor()
+    att_cnt = cursor.execute("SELECT COUNT(*) FROM attendees").fetchone()[0]
+    eval_cnt = cursor.execute("SELECT COUNT(*) FROM evaluations").fetchone()[0]
+    cursor.execute("DELETE FROM evaluations")
+    cursor.execute("DELETE FROM attendees")
+    conn.commit()
+    conn.close()
+    return {
+        "status": "success",
+        "deleted_attendees": att_cnt,
+        "deleted_evaluations": eval_cnt,
+        "message": f"Cleared {att_cnt} attendee(s) and {eval_cnt} evaluation record(s)."
+    }
+
+
+# ==============================================================================
+# CERTIFICATE GENERATION & EMAIL DELIVERY TRACKING HELPERS
+# ==============================================================================
+
+def claim_certificate_for_sending(
+    student_id: str,
+    force: bool = False,
+    require_staged: bool = False
+) -> Optional[Dict[str, Any]]:
+    """
+    Atomically claims an eligible attendee for certificate email delivery.
+    Returns the attendee dict if claimed, or None if ineligible / already SENT / currently SENDING.
+    When force=True, allows re-sending even if cert_email_status == 'SENT'.
+    When require_staged=True, only claims attendees with cert_quality_status == 'STAGED'.
+    """
+    sid = student_id.strip().upper()
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("BEGIN IMMEDIATE")
+        allowed_statuses = ("NOT_SENT", "FAILED", "SENT") if force else ("NOT_SENT", "FAILED")
+        placeholders = ",".join("?" for _ in allowed_statuses)
+        staged_clause = "AND COALESCE(cert_quality_status, 'PENDING_REVIEW') = 'STAGED'" if require_staged else ""
+        cursor.execute(f"""
+            UPDATE attendees
+            SET cert_email_status = 'SENDING',
+                cert_email_error = ''
+            WHERE UPPER(student_id) = ?
+              AND is_eligible = 1
+              AND COALESCE(cert_email_status, 'NOT_SENT') IN ({placeholders})
+              {staged_clause}
+        """, (sid, *allowed_statuses))
+        if cursor.rowcount != 1:
+            conn.rollback()
+            conn.close()
+            return None
+        row = cursor.execute("SELECT * FROM attendees WHERE UPPER(student_id) = ?", (sid,)).fetchone()
+        conn.commit()
+        return dict(row) if row else None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def update_certificate_delivery_status(
+    student_id: str,
+    status: str,
+    file_path: str = "",
+    error: str = ""
+) -> None:
+    """Updates cert_email_status, cert_file_path, cert_emailed_at, and cert_email_error."""
+    sid = student_id.strip().upper()
+    conn = get_db()
+    cursor = conn.cursor()
+    if status == "SENT":
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("""
+            UPDATE attendees
+            SET cert_email_status = 'SENT',
+                cert_file_path = COALESCE(NULLIF(?, ''), cert_file_path),
+                cert_emailed_at = ?,
+                cert_email_error = ''
+            WHERE UPPER(student_id) = ?
+        """, (file_path, now_str, sid))
+    else:
+        cursor.execute("""
+            UPDATE attendees
+            SET cert_email_status = ?,
+                cert_file_path = COALESCE(NULLIF(?, ''), cert_file_path),
+                cert_email_error = ?
+            WHERE UPPER(student_id) = ?
+        """, (status, file_path, (error or "")[:500], sid))
+    conn.commit()
+    conn.close()
+
+
+def get_pending_certificate_student_ids(include_failed: bool = True, staged_only: bool = False) -> List[str]:
+    """Returns student_ids of eligible attendees whose certificate email has not been sent yet."""
+    conn = get_db()
+    cursor = conn.cursor()
+    staged_clause = "AND COALESCE(cert_quality_status, 'PENDING_REVIEW') = 'STAGED'" if staged_only else ""
+    if include_failed:
+        rows = cursor.execute(f"""
+            SELECT student_id FROM attendees
+            WHERE is_eligible = 1
+              AND COALESCE(cert_email_status, 'NOT_SENT') IN ('NOT_SENT', 'FAILED')
+              {staged_clause}
+            ORDER BY id ASC
+        """).fetchall()
+    else:
+        rows = cursor.execute(f"""
+            SELECT student_id FROM attendees
+            WHERE is_eligible = 1
+              AND COALESCE(cert_email_status, 'NOT_SENT') = 'NOT_SENT'
+              {staged_clause}
+            ORDER BY id ASC
+        """).fetchall()
+    conn.close()
+    return [r["student_id"] for r in rows]
+
+
+def get_certificate_delivery_summary() -> Dict[str, int]:
+    """Returns counts of eligible attendees by certificate email delivery and quality status."""
+    conn = get_db()
+    cursor = conn.cursor()
+    row = cursor.execute("""
+        SELECT
+            SUM(CASE WHEN is_eligible = 1 THEN 1 ELSE 0 END) AS eligible_total,
+            SUM(CASE WHEN is_eligible = 1 AND COALESCE(cert_email_status, 'NOT_SENT') = 'NOT_SENT' THEN 1 ELSE 0 END) AS not_sent,
+            SUM(CASE WHEN is_eligible = 1 AND cert_email_status = 'SENDING' THEN 1 ELSE 0 END) AS sending,
+            SUM(CASE WHEN is_eligible = 1 AND cert_email_status = 'SENT' THEN 1 ELSE 0 END) AS sent,
+            SUM(CASE WHEN is_eligible = 1 AND cert_email_status = 'FAILED' THEN 1 ELSE 0 END) AS failed,
+            SUM(CASE WHEN is_eligible = 1 AND COALESCE(cert_quality_status, 'PENDING_REVIEW') = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review,
+            SUM(CASE WHEN is_eligible = 1 AND cert_quality_status = 'STAGED' THEN 1 ELSE 0 END) AS staged,
+            SUM(CASE WHEN is_eligible = 1 AND cert_quality_status = 'HELD' THEN 1 ELSE 0 END) AS held
+        FROM attendees
+    """).fetchone()
+    conn.close()
+    return {
+        "eligible_total": int(row["eligible_total"] or 0),
+        "not_sent": int(row["not_sent"] or 0),
+        "sending": int(row["sending"] or 0),
+        "sent": int(row["sent"] or 0),
+        "failed": int(row["failed"] or 0),
+        "pending_review": int(row["pending_review"] or 0),
+        "staged": int(row["staged"] or 0),
+        "held": int(row["held"] or 0),
+    }
+
+
+def set_certificate_quality_status(student_id: str, quality_status: str) -> Dict[str, Any]:
+    """Sets cert_quality_status ('PENDING_REVIEW', 'STAGED', or 'HELD') for an attendee."""
+    qs = quality_status.strip().upper()
+    if qs not in ("PENDING_REVIEW", "STAGED", "HELD"):
+        return {"status": "error", "message": "Invalid quality status."}
+    sid = student_id.strip().upper()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE attendees SET cert_quality_status = ?
+        WHERE UPPER(student_id) = ?
+    """, (qs, sid))
+    updated = cursor.rowcount
+    conn.commit()
+    conn.close()
+    if not updated:
+        return {"status": "error", "message": f"Student ID '{sid}' not found."}
+    return {"status": "success", "student_id": sid, "cert_quality_status": qs}
+
+
+def bulk_stage_clean_certificates(student_ids: List[str]) -> int:
+    """Stages a list of eligible, non-held attendees into the send pool."""
+    if not student_ids:
+        return 0
+    conn = get_db()
+    cursor = conn.cursor()
+    clean_ids = [s.strip().upper() for s in student_ids if s and s.strip()]
+    placeholders = ",".join("?" for _ in clean_ids)
+    cursor.execute(f"""
+        UPDATE attendees
+        SET cert_quality_status = 'STAGED'
+        WHERE UPPER(student_id) IN ({placeholders})
+          AND is_eligible = 1
+          AND COALESCE(cert_quality_status, 'PENDING_REVIEW') != 'HELD'
+    """, clean_ids)
+    count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return count
+
+
+def rescue_near_miss_to_eligible(student_id: str) -> Dict[str, Any]:
+    """Promotes a near-miss attendee to MANUAL_APPROVED and stashes them in the STAGED pool."""
+    sid = student_id.strip().upper()
+    conn = get_db()
+    cursor = conn.cursor()
+    row = cursor.execute("SELECT full_name FROM attendees WHERE UPPER(student_id) = ?", (sid,)).fetchone()
+    if not row:
+        conn.close()
+        return {"status": "error", "message": f"Student ID '{sid}' not found."}
+    cursor.execute("""
+        UPDATE attendees
+        SET is_eligible = 1,
+            cert_status = 'MANUAL_APPROVED',
+            cert_quality_status = 'STAGED'
+        WHERE UPPER(student_id) = ?
+    """, (sid,))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": f"Approved and stashed {row['full_name']} into the certificate pool."}
+
+
+def quick_fix_attendee_identity(
+    student_id: str,
+    last_name: str,
+    first_name: str,
+    middle_name: str,
+    email: str,
+) -> Dict[str, Any]:
+    """Inline fix from /quality for troll/typo names or email typos; invalidates stale PDF."""
+    sid = student_id.strip().upper()
+    conn = get_db()
+    cursor = conn.cursor()
+    row = cursor.execute("SELECT * FROM attendees WHERE UPPER(student_id) = ?", (sid,)).fetchone()
+    if not row:
+        conn.close()
+        return {"status": "error", "message": f"Student ID '{sid}' not found."}
+    ln = last_name.strip()
+    fn = first_name.strip()
+    mn = (middle_name or "N/A").strip() or "N/A"
+    full_name = compute_full_name(ln, fn, mn)
+    em = email.strip().lower()
+    email_changed = (em != (row["email"] or "").strip().lower())
+    new_email_status = "NOT_SENT" if email_changed else (row["cert_email_status"] or "NOT_SENT")
+    cursor.execute("""
+        UPDATE attendees
+        SET last_name = ?,
+            first_name = ?,
+            middle_name = ?,
+            full_name = ?,
+            email = ?,
+            cert_file_path = '',
+            cert_email_status = ?,
+            cert_email_error = ''
+        WHERE UPPER(student_id) = ?
+    """, (ln, fn, mn, full_name, em, new_email_status, sid))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "full_name": full_name, "email": em, "message": f"Updated {full_name}."}
