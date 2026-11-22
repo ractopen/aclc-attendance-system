@@ -58,14 +58,23 @@
 <div class="page-body my-4">
   <div class="container-xl" style="max-width: 760px;">
 
-    <!-- Warning Banner when system is not in Time Out mode -->
-    <div id="scannerPhaseWarning" class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 py-2 px-3 mb-3 shadow-sm {% if status == 'Time Out' %}d-none{% endif %}">
-      <div class="small fw-bold text-dark">
-        Notice: System is currently in <strong id="scannerWarnModeText">{{ active_session_label }}</strong> mode. Switch to Time Out mode to scan exiting students.
+    <!-- Phase Banner (Time-In Scan Mode / Locked Warning) -->
+    <div id="scannerPhaseWarning" class="alert {% if status == 'Time In' %}alert-info{% else %}alert-warning{% endif %} d-flex justify-content-between align-items-center flex-wrap gap-2 py-2 px-3 mb-3 shadow-sm {% if status == 'Time Out' %}d-none{% endif %}">
+      <div class="small fw-bold text-dark" id="scannerWarnMsgWrap">
+        {% if status == 'Time In' %}
+          Time-In Scan Mode (<strong id="scannerWarnModeText">{{ active_session_label }}</strong>): Scan a student's QR pass or enter their ID to record Time In.
+        {% else %}
+          Notice: System is currently in <strong id="scannerWarnModeText">{{ active_session_label }}</strong> mode. Switch to Time In or Time Out mode to scan.
+        {% endif %}
       </div>
-      <button type="button" id="btnQuickEnableTimeOut" class="btn btn-warning btn-sm fw-bold text-dark">
-        Switch to Time Out Mode Now
-      </button>
+      <div class="d-flex gap-2 flex-wrap">
+        <button type="button" id="btnQuickEnableTimeIn" class="btn btn-aclc btn-sm fw-bold {% if status != 'Closed' %}d-none{% endif %}">
+          Switch to Time In
+        </button>
+        <button type="button" id="btnQuickEnableTimeOut" class="btn btn-warning btn-sm fw-bold text-dark">
+          Switch to Time Out Mode Now
+        </button>
+      </div>
     </div>
 
     <!-- Camera Control Card -->
@@ -119,15 +128,20 @@
 
     <!-- Manual Entry Card -->
     <div class="card mb-3 shadow-sm border-0">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+        <span class="fw-bold text-aclc-blue">Manual Entry / USB Barcode Scanner</span>
+        <button type="button" id="btnOpenScannerManualAdd" class="btn btn-outline-primary btn-sm fw-bold">
+          Add Attendee &amp; Time In
+        </button>
+      </div>
       <div class="card-body p-3">
-        <label class="form-label fw-bold text-aclc-blue mb-1">Manual Entry / USB Barcode Scanner</label>
         <form id="manualScanForm" class="d-flex gap-2">
           <input type="text" id="manualScanInput" class="form-control form-control-lg font-monospace text-uppercase" placeholder="Student ID (e.g. C24-01234)" autofocus autocomplete="off">
           <button type="submit" id="btnManualSubmit" class="btn btn-aclc fw-bold px-4">
-            Time Out
+            {{ 'Time In' if status == 'Time In' else 'Time Out' }}
           </button>
         </form>
-        <small class="text-muted mt-1 d-block">Press Enter to submit immediately</small>
+        <small class="text-muted mt-1 d-block">Press Enter to submit immediately, or use <strong>Add Attendee &amp; Time In</strong> for walk-up registration</small>
       </div>
     </div>
 
@@ -203,6 +217,85 @@
     </div>
   </div>
 </div>
+
+<!-- Modal: Officer / Admin Add Attendee & Time In -->
+<div class="modal fade" id="modalScannerManualAdd" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content shadow border-0">
+      <div class="modal-header bg-aclc-blue text-white">
+        <h5 class="modal-title fw-bold">Add Attendee &amp; Time In</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formScannerManualAdd" autocomplete="off">
+        <div class="modal-body p-4">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Student ID <span class="text-muted fw-normal">(Optional)</span></label>
+              <input type="text" class="form-control text-uppercase font-monospace" id="scanManStudentId" placeholder="Leave blank for temporary NOID pass" maxlength="50">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Section</label>
+              <input type="text" class="form-control text-uppercase" id="scanManSection" placeholder="e.g. 11-ICT-A, CS31A" maxlength="50" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Last Name</label>
+              <input type="text" class="form-control" id="scanManLastName" maxlength="100" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">First Name</label>
+              <input type="text" class="form-control" id="scanManFirstName" maxlength="100" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Middle Name</label>
+              <input type="text" class="form-control" id="scanManMiddleName" maxlength="100" placeholder="Optional">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Sex</label>
+              <select class="form-select" id="scanManSex" required>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Age</label>
+              <input type="number" class="form-control" id="scanManAge" value="18" min="10" max="120" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label required">Category</label>
+              <select class="form-select" id="scanManLevel" required>
+                <option value="SHS">Senior High (SHS)</option>
+                <option value="COLLEGE">College Level</option>
+                <option value="NON_STUDENT">Guest / Other</option>
+              </select>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label required">Email</label>
+              <input type="email" class="form-control" id="scanManEmail" placeholder="name@gmail.com" maxlength="120" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label required">Session</label>
+              <select class="form-select" id="scanManPhase" required>
+                <option value="MORNING_IN">Morning Time In</option>
+                <option value="AFTERNOON_IN">Afternoon Time In</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Time In (Optional)</label>
+              <input type="datetime-local" class="form-control" id="scanManTimeIn">
+              <small class="text-muted">Leave blank to use current time</small>
+            </div>
+          </div>
+          <div id="scannerManualAddAlert" class="small mt-3 d-none fw-bold"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" id="btnSubmitScannerManualAdd" class="btn btn-aclc fw-bold">Register &amp; Time In</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -269,24 +362,64 @@ document.addEventListener("DOMContentLoaded", function() {
     } catch(e) {}
   }
 
-  // Time Out Submission
-  async function submitTimeOut(studentIdRaw) {
+  let currentPhase = "{{ phase }}";
+  let currentScannerSession = currentPhase.startsWith("AFTERNOON") ? "AFTERNOON" : "MORNING";
+
+  function escapeScannerHtml(str) {
+    return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function showScannerError(msg, missingSid = null) {
+    scanErrorBox.innerHTML = "";
+    const msgSpan = document.createElement("span");
+    msgSpan.textContent = msg;
+    scanErrorBox.appendChild(msgSpan);
+    if (missingSid) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-sm btn-light border ms-2 fw-bold";
+      btn.textContent = "Add Attendee & Time In";
+      btn.addEventListener("click", () => openScannerManualAddModal(missingSid));
+      scanErrorBox.appendChild(btn);
+    }
+    scanErrorBox.classList.remove("d-none");
+  }
+
+  function appendRecentScanRow(timeFmt, sid, name, sectionText, durText, badgeCls, badgeLabel) {
+    if (emptyScanRow) emptyScanRow.classList.add("d-none");
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td class="font-monospace small">${escapeScannerHtml(timeFmt)}</td>
+      <td class="font-monospace fw-bold">${escapeScannerHtml(sid)}</td>
+      <td class="fw-bold">${escapeScannerHtml(name)}</td>
+      <td><span class="badge bg-secondary-lt">${escapeScannerHtml(sectionText || "Logged")}</span></td>
+      <td>${escapeScannerHtml(durText)}</td>
+      <td><span class="badge ${badgeCls} text-white">${escapeScannerHtml(badgeLabel)}</span></td>
+    `;
+    recentScansTbody.insertBefore(row, recentScansTbody.firstChild);
+  }
+
+  // Phase-Aware Scan Submission (Time-In or Time-Out depending on active phase)
+  async function submitScan(studentIdRaw) {
     scanErrorBox.classList.add("d-none");
     const sid = studentIdRaw.trim();
     if (!sid) return;
 
-    // 8-second debounce for same code
+    const debounceKey = `${currentPhase}:${sid.toUpperCase()}`;
     const nowMs = Date.now();
-    if (recentDebounceMap.has(sid) && (nowMs - recentDebounceMap.get(sid)) < 8000) {
+    if (recentDebounceMap.has(debounceKey) && (nowMs - recentDebounceMap.get(debounceKey)) < 8000) {
       return;
     }
-    recentDebounceMap.set(sid, nowMs);
+    recentDebounceMap.set(debounceKey, nowMs);
+
+    const isTimeInPhase = (currentPhase === "MORNING_IN" || currentPhase === "AFTERNOON_IN");
+    const endpoint = isTimeInPhase ? "/api/admin/scanner-time-in" : "/api/attendance/out";
 
     btnManualSubmit.disabled = true;
     manualScanInput.disabled = true;
 
     try {
-      const resp = await fetch("/api/attendance/out", {
+      const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ student_id: sid })
@@ -294,22 +427,72 @@ document.addEventListener("DOMContentLoaded", function() {
 
       if (resp.status === 401) {
         playChime(false);
-        scanErrorBox.textContent = "Admin session expired. Redirecting to login...";
-        scanErrorBox.classList.remove("d-none");
+        showScannerError("Admin session expired. Redirecting to login...");
         setTimeout(() => {
           window.location.href = "/admin/login?next=/admin/scanner";
         }, 1200);
         return;
       }
 
-      const res = await resp.json();
+      let res = null;
+      const contentType = resp.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        res = await resp.json();
+      } else {
+        const text = await resp.text();
+        res = { status: "error", message: `Server returned HTTP ${resp.status}: ${text.slice(0, 120)}` };
+      }
 
-      if (!resp.ok || res.status === "error") {
-        recentDebounceMap.delete(sid);
+      if (!resp.ok || !res || res.status === "error" || res.status === "not_found") {
+        recentDebounceMap.delete(debounceKey);
         playChime(false);
-        scanErrorBox.textContent = res.message || "Failed to record Time Out.";
-        scanErrorBox.classList.remove("d-none");
+        const missingSid = res && res.status === "not_found" ? (res.student_id || (sid.toUpperCase().startsWith("ACLC:") ? "" : sid.toUpperCase())) : null;
+        showScannerError((res && res.message) || `Scan failed (HTTP ${resp.status}).`, missingSid);
         scanResultCard.classList.add("d-none");
+      } else if (isTimeInPhase) {
+        playChime(true);
+        totalScanned++;
+        sessionCountBadge.textContent = `${totalScanned} Scanned`;
+
+        scanResultCard.classList.remove("d-none", "scan-pop");
+        void scanResultCard.offsetWidth;
+        scanResultCard.classList.add("scan-pop");
+        resultStudentName.textContent = res.student_name;
+        resultStudentId.textContent = res.student_id;
+        resultDetails.textContent = res.message || `${res.session_label || ''} Time In at ${res.time_fmt || res.time}`;
+        resultDurationText.textContent = `Session: ${res.session_label || (currentPhase === 'AFTERNOON_IN' ? 'Afternoon' : 'Morning')}`;
+
+        if (res.status === "already_timed_in") {
+          resultBadge.className = "badge bg-warning text-dark fs-3 px-3 py-1 mb-2";
+          resultBadge.textContent = "Already Timed In";
+          resultStatusTop.className = "card-status-top bg-warning";
+          resultDurationBox.className = "p-2 px-3 rounded border border-warning bg-warning-lt";
+          resultEligibleBadge.className = "badge bg-warning text-dark";
+          resultEligibleBadge.textContent = "Already In";
+          resultNoteText.className = "small mt-1 text-dark fw-bold";
+          resultNoteText.textContent = res.message || "Time In was already recorded for this session.";
+        } else {
+          resultBadge.className = "badge bg-aclc-blue text-white fs-3 px-3 py-1 mb-2";
+          resultBadge.textContent = `${res.session_label || ''} Time In Recorded`;
+          resultStatusTop.className = "card-status-top bg-aclc-blue";
+          resultDurationBox.className = "p-2 px-3 rounded border border-primary bg-blue-lt";
+          resultEligibleBadge.className = "badge bg-azure text-white";
+          resultEligibleBadge.textContent = "Timed In";
+          resultNoteText.className = "small mt-1 text-dark fw-bold";
+          resultNoteText.textContent = res.morning_voided
+            ? "Note: Prior unclosed Morning Time-In was voided; Afternoon Time-In is now active."
+            : "Attendee checked in. Remember to scan Time Out before leaving.";
+        }
+
+        appendRecentScanRow(
+          res.time_fmt || (res.time ? res.time.split(" ")[1] : "-"),
+          res.student_id,
+          res.student_name,
+          res.section || "Logged",
+          "-",
+          res.status === "already_timed_in" ? "bg-warning" : "bg-azure",
+          res.status === "already_timed_in" ? "Already In" : `${res.session_label || ''} In`
+        );
       } else {
         playChime(true);
         totalScanned++;
@@ -361,26 +544,22 @@ document.addEventListener("DOMContentLoaded", function() {
           resultNoteText.textContent = res.note || "Under required duration.";
         }
 
-        // Add to Recent Scans Table
-        if (emptyScanRow) emptyScanRow.classList.add("d-none");
-        const row = document.createElement("tr");
         const statusBadgeLabel = isEligible ? "Approved" : (attEligible ? "Needs Eval" : "Under");
         const statusBadgeCls = isEligible ? "bg-green" : (attEligible ? "bg-azure" : "bg-warning");
-        row.innerHTML = `
-          <td class="font-monospace small">${res.time_fmt || res.time.split(' ')[1]}</td>
-          <td class="font-monospace fw-bold">${res.student_id}</td>
-          <td class="fw-bold">${res.student_name}</td>
-          <td><span class="badge bg-secondary-lt">Logged</span></td>
-          <td>${Math.round(res.duration_min)}m</td>
-          <td><span class="badge ${statusBadgeCls} text-white">${statusBadgeLabel}</span></td>
-        `;
-        recentScansTbody.insertBefore(row, recentScansTbody.firstChild);
+        appendRecentScanRow(
+          res.time_fmt || (res.time ? res.time.split(" ")[1] : "-"),
+          res.student_id,
+          res.student_name,
+          res.section || "Logged",
+          `${Math.round(res.duration_min)}m`,
+          statusBadgeCls,
+          statusBadgeLabel
+        );
       }
     } catch(err) {
-      recentDebounceMap.delete(sid);
+      recentDebounceMap.delete(debounceKey);
       playChime(false);
-      scanErrorBox.textContent = "Network error. Please check server connection.";
-      scanErrorBox.classList.remove("d-none");
+      showScannerError("Network error. Please check server connection.");
     } finally {
       btnManualSubmit.disabled = false;
       manualScanInput.disabled = false;
@@ -412,6 +591,56 @@ document.addEventListener("DOMContentLoaded", function() {
       msg.includes("permission") || msg.includes("notallowed") || msg.includes("denied");
   }
 
+  function createQrScanner() {
+    const opts = {
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    };
+    if (typeof Html5QrcodeSupportedFormats !== "undefined" && Html5QrcodeSupportedFormats.QR_CODE !== undefined) {
+      opts.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
+    }
+    return new Html5Qrcode("reader", opts);
+  }
+
+  function downscaleImageFile(file, maxDim = 1200) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const objUrl = URL.createObjectURL(file);
+      img.onload = function() {
+        URL.revokeObjectURL(objUrl);
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (!w || !h || (w <= maxDim && h <= maxDim)) {
+          resolve(file);
+          return;
+        }
+        const scale = Math.min(maxDim / w, maxDim / h);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], "qr-scaled.jpg", { type: "image/jpeg" }));
+          } else {
+            resolve(file);
+          }
+        }, "image/jpeg", 0.92);
+      };
+      img.onerror = function() {
+        URL.revokeObjectURL(objUrl);
+        resolve(file);
+      };
+      img.src = objUrl;
+    });
+  }
+
   async function startCamera() {
     if (isCameraTransitioning || isCameraScanning) return;
     scanErrorBox.classList.add("d-none");
@@ -441,35 +670,57 @@ document.addEventListener("DOMContentLoaded", function() {
     btnToggleCamera.textContent = "Starting...";
 
     if (!html5QrCode) {
-      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode = createQrScanner();
     }
 
     const config = {
       fps: 15,
-      qrbox: { width: 220, height: 220 },
-      aspectRatio: 1.0
+      qrbox: function(viewfinderWidth, viewfinderHeight) {
+        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+        const edge = Math.max(160, Math.min(300, Math.floor(minEdge * 0.8)));
+        return { width: edge, height: edge };
+      }
     };
 
     try {
-      let cameraTarget = { facingMode: "environment" };
+      const targets = [];
       try {
         const cameras = await Html5Qrcode.getCameras();
         if (cameras && cameras.length > 0) {
           const backCam = cameras.find(c => /back|rear|environment/i.test(c.label || ""));
-          cameraTarget = (backCam || cameras[0]).id;
+          targets.push((backCam || cameras[0]).id);
         }
       } catch (camErr) {
         if (isPermissionDeniedError(camErr)) {
           throw camErr;
         }
       }
+      targets.push({ facingMode: "environment" }, { facingMode: "user" });
 
-      await html5QrCode.start(
-        cameraTarget,
-        config,
-        (decodedText) => submitTimeOut(decodedText),
-        () => {}
-      );
+      let lastErr = null;
+      let started = false;
+      for (const target of targets) {
+        try {
+          await html5QrCode.start(
+            target,
+            config,
+            (decodedText) => submitScan(decodedText),
+            () => {}
+          );
+          started = true;
+          break;
+        } catch (startErr) {
+          lastErr = startErr;
+          if (isPermissionDeniedError(startErr)) {
+            throw startErr;
+          }
+          try { html5QrCode.clear(); } catch (e) {}
+        }
+      }
+      if (!started) {
+        throw lastErr || new Error("Unable to start camera stream.");
+      }
+
       isCameraScanning = true;
       btnToggleCamera.textContent = "Stop Camera";
     } catch (err) {
@@ -477,7 +728,8 @@ document.addEventListener("DOMContentLoaded", function() {
       if (isPermissionDeniedError(err)) {
         resetCameraUI("Camera permission was denied. Allow camera access in your browser settings, or use 'Snap QR Photo' / Manual Entry.");
       } else {
-        resetCameraUI("Camera is unavailable on this device or already in use. Use 'Snap QR Photo' or Manual Entry below.");
+        const detail = err && (err.name || err.message) ? ` (${err.name || "Error"}: ${err.message || err})` : "";
+        resetCameraUI(`Camera is unavailable on this device or already in use${detail}. Use 'Snap QR Photo' or Manual Entry below.`);
       }
     } finally {
       isCameraTransitioning = false;
@@ -532,14 +784,25 @@ document.addEventListener("DOMContentLoaded", function() {
         await stopCamera();
       }
       if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode = createQrScanner();
       }
       try {
-        const decodedText = await html5QrCode.scanFile(imageFile, false);
-        submitTimeOut(decodedText);
+        const scaledFile = await downscaleImageFile(imageFile, 1200);
+        let decodedText = null;
+        try {
+          decodedText = await html5QrCode.scanFile(scaledFile, false);
+        } catch (firstErr) {
+          if (scaledFile !== imageFile) {
+            decodedText = await html5QrCode.scanFile(imageFile, false);
+          } else {
+            throw firstErr;
+          }
+        }
+        submitScan(decodedText);
       } catch (err) {
+        console.warn("QR photo decode failed:", err);
         playChime(false);
-        scanErrorBox.textContent = "Could not detect a QR code in the image. Please hold the camera steady and try again, or enter Student ID manually.";
+        scanErrorBox.textContent = "Could not detect a QR code in the image. Please hold the camera steady, ensure good lighting, or enter Student ID manually.";
         scanErrorBox.classList.remove("d-none");
       } finally {
         qrFileInput.value = "";
@@ -549,8 +812,122 @@ document.addEventListener("DOMContentLoaded", function() {
 
   manualScanForm.addEventListener("submit", function(e) {
     e.preventDefault();
-    submitTimeOut(manualScanInput.value);
+    submitScan(manualScanInput.value);
   });
+
+  // Officer / Admin Add Attendee & Time In Modal
+  const btnOpenScannerManualAdd = document.getElementById("btnOpenScannerManualAdd");
+  const formScannerManualAdd = document.getElementById("formScannerManualAdd");
+  const scannerManualAddAlert = document.getElementById("scannerManualAddAlert");
+  const btnSubmitScannerManualAdd = document.getElementById("btnSubmitScannerManualAdd");
+
+  function openScannerManualAddModal(prefillSid = "") {
+    if (scannerManualAddAlert) {
+      scannerManualAddAlert.className = "small mt-3 d-none fw-bold";
+      scannerManualAddAlert.textContent = "";
+    }
+    const sidEl = document.getElementById("scanManStudentId");
+    const phaseEl = document.getElementById("scanManPhase");
+    if (sidEl) sidEl.value = prefillSid || "";
+    if (phaseEl) phaseEl.value = currentScannerSession === "AFTERNOON" ? "AFTERNOON_IN" : "MORNING_IN";
+    window.openModalById("modalScannerManualAdd");
+  }
+
+  if (btnOpenScannerManualAdd) {
+    btnOpenScannerManualAdd.addEventListener("click", () => openScannerManualAddModal(""));
+  }
+
+  if (formScannerManualAdd) {
+    formScannerManualAdd.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      if (scannerManualAddAlert) scannerManualAddAlert.className = "small mt-3 d-none fw-bold";
+      const rawTime = document.getElementById("scanManTimeIn").value;
+      const formattedTime = rawTime ? (rawTime.replace("T", " ") + (rawTime.length === 16 ? ":00" : "")) : null;
+
+      const payload = {
+        student_id: document.getElementById("scanManStudentId").value.trim().toUpperCase(),
+        last_name: document.getElementById("scanManLastName").value.trim(),
+        first_name: document.getElementById("scanManFirstName").value.trim(),
+        middle_name: document.getElementById("scanManMiddleName").value.trim() || "N/A",
+        sex: document.getElementById("scanManSex").value,
+        age: parseInt(document.getElementById("scanManAge").value, 10),
+        level: document.getElementById("scanManLevel").value,
+        section: document.getElementById("scanManSection").value.trim().toUpperCase(),
+        email: document.getElementById("scanManEmail").value.trim().toLowerCase(),
+        phase: document.getElementById("scanManPhase").value,
+        time_in: formattedTime
+      };
+
+      if (btnSubmitScannerManualAdd) {
+        btnSubmitScannerManualAdd.disabled = true;
+        btnSubmitScannerManualAdd.textContent = "Saving...";
+      }
+
+      try {
+        const resp = await fetch("/api/admin/manual-add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (resp.status === 401) {
+          window.location.href = "/admin/login?next=/admin/scanner";
+          return;
+        }
+        const data = await resp.json();
+        if (!resp.ok || data.status === "error") {
+          if (scannerManualAddAlert) {
+            scannerManualAddAlert.textContent = data.message || data.detail || "Failed to add attendee.";
+            scannerManualAddAlert.className = "small mt-3 text-danger fw-bold";
+          }
+          playChime(false);
+        } else {
+          playChime(true);
+          window.closeModalById("modalScannerManualAdd");
+          formScannerManualAdd.reset();
+          totalScanned++;
+          sessionCountBadge.textContent = `${totalScanned} Scanned`;
+          scanErrorBox.classList.add("d-none");
+
+          scanResultCard.classList.remove("d-none", "scan-pop");
+          void scanResultCard.offsetWidth;
+          scanResultCard.classList.add("scan-pop");
+          resultBadge.className = "badge bg-aclc-blue text-white fs-3 px-3 py-1 mb-2";
+          resultBadge.textContent = `${data.session_label || ""} Time In Recorded`;
+          resultStudentName.textContent = data.student_name;
+          resultStudentId.textContent = data.student_id;
+          resultDetails.textContent = data.message || `Registered & Timed In at ${data.time_fmt || data.time}`;
+          resultStatusTop.className = "card-status-top bg-aclc-blue";
+          resultDurationBox.className = "p-2 px-3 rounded border border-primary bg-blue-lt";
+          resultDurationText.textContent = `Session: ${data.session_label || "Morning"}`;
+          resultEligibleBadge.className = "badge bg-azure text-white";
+          resultEligibleBadge.textContent = "Manual In";
+          resultNoteText.className = "small mt-1 text-dark fw-bold";
+          resultNoteText.textContent = "Attendee manually added and checked in.";
+
+          appendRecentScanRow(
+            data.time_fmt || (data.time ? data.time.split(" ")[1] : "-"),
+            data.student_id,
+            data.student_name,
+            data.section || "Manual",
+            "-",
+            "bg-azure",
+            `${data.session_label || "Manual"} In`
+          );
+        }
+      } catch (err) {
+        if (scannerManualAddAlert) {
+          scannerManualAddAlert.textContent = "Network error adding attendee.";
+          scannerManualAddAlert.className = "small mt-3 text-danger fw-bold";
+        }
+        playChime(false);
+      } finally {
+        if (btnSubmitScannerManualAdd) {
+          btnSubmitScannerManualAdd.disabled = false;
+          btnSubmitScannerManualAdd.textContent = "Register & Time In";
+        }
+      }
+    });
+  }
 
   // Done Button Action
   btnDoneScanning.addEventListener("click", function() {
@@ -561,36 +938,73 @@ document.addEventListener("DOMContentLoaded", function() {
     window.openModalById("sessionSummaryModal");
   });
 
-  // Quick Enable Time Out Mode button
-  let currentScannerSession = "{{ 'AFTERNOON' if session == 'Afternoon' else 'MORNING' }}";
+  // Phase UI Sync & Quick Mode Switchers
   const scannerPhaseWarning = document.getElementById("scannerPhaseWarning");
-  const scannerWarnModeText = document.getElementById("scannerWarnModeText");
+  const scannerWarnMsgWrap = document.getElementById("scannerWarnMsgWrap");
   const btnQuickEnableTimeOut = document.getElementById("btnQuickEnableTimeOut");
+  const btnQuickEnableTimeIn = document.getElementById("btnQuickEnableTimeIn");
+
+  function syncScannerPhaseUI(phaseVal, activeLabel) {
+    if (phaseVal) {
+      currentPhase = phaseVal;
+      currentScannerSession = currentPhase.startsWith("AFTERNOON") ? "AFTERNOON" : "MORNING";
+    }
+    const lbl = document.getElementById("scannerSessionLabel");
+    if (lbl && activeLabel) lbl.textContent = activeLabel;
+
+    if (currentPhase === "MORNING_IN" || currentPhase === "AFTERNOON_IN") {
+      btnManualSubmit.textContent = "Time In";
+      if (scannerPhaseWarning) {
+        scannerPhaseWarning.className = "alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2 py-2 px-3 mb-3 shadow-sm";
+      }
+      if (scannerWarnMsgWrap) {
+        scannerWarnMsgWrap.innerHTML = `Time-In Scan Mode (<strong>${escapeScannerHtml(activeLabel || currentPhase)}</strong>): Scan a student's QR pass or enter their ID to record Time In.`;
+      }
+      if (btnQuickEnableTimeIn) btnQuickEnableTimeIn.classList.add("d-none");
+      if (btnQuickEnableTimeOut) btnQuickEnableTimeOut.classList.remove("d-none");
+    } else if (currentPhase === "MORNING_OUT" || currentPhase === "AFTERNOON_OUT") {
+      btnManualSubmit.textContent = "Time Out";
+      if (scannerPhaseWarning) scannerPhaseWarning.classList.add("d-none");
+    } else {
+      btnManualSubmit.textContent = "Time Out";
+      if (scannerPhaseWarning) {
+        scannerPhaseWarning.className = "alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 py-2 px-3 mb-3 shadow-sm";
+      }
+      if (scannerWarnMsgWrap) {
+        scannerWarnMsgWrap.innerHTML = `Notice: System is currently <strong>${escapeScannerHtml(activeLabel || "Locked")}</strong>. Switch to Time In or Time Out mode to scan.`;
+      }
+      if (btnQuickEnableTimeIn) btnQuickEnableTimeIn.classList.remove("d-none");
+      if (btnQuickEnableTimeOut) btnQuickEnableTimeOut.classList.remove("d-none");
+    }
+  }
+
+  async function quickSwitchScannerPhase(targetPhase, btnEl, origLabel) {
+    if (!btnEl) return;
+    btnEl.disabled = true;
+    btnEl.textContent = "Switching...";
+    try {
+      const resp = await fetch("/api/admin/set-phase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phase: targetPhase })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        syncScannerPhaseUI(data.phase, `${data.session} ${data.event_status}`);
+        scanErrorBox.classList.add("d-none");
+      }
+    } catch(e) {
+    } finally {
+      btnEl.disabled = false;
+      btnEl.textContent = origLabel;
+    }
+  }
 
   if (btnQuickEnableTimeOut) {
-    btnQuickEnableTimeOut.addEventListener("click", async function() {
-      btnQuickEnableTimeOut.disabled = true;
-      btnQuickEnableTimeOut.textContent = "Switching...";
-      const targetPhase = `${currentScannerSession}_OUT`;
-      try {
-        const resp = await fetch("/api/admin/set-phase", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phase: targetPhase })
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          const lbl = document.getElementById("scannerSessionLabel");
-          if (lbl) lbl.textContent = `${data.session} ${data.event_status}`;
-          if (scannerPhaseWarning) scannerPhaseWarning.classList.add("d-none");
-          scanErrorBox.classList.add("d-none");
-        }
-      } catch(e) {
-      } finally {
-        btnQuickEnableTimeOut.disabled = false;
-        btnQuickEnableTimeOut.textContent = "Switch to Time Out Mode Now";
-      }
-    });
+    btnQuickEnableTimeOut.addEventListener("click", () => quickSwitchScannerPhase(`${currentScannerSession}_OUT`, btnQuickEnableTimeOut, "Switch to Time Out Mode Now"));
+  }
+  if (btnQuickEnableTimeIn) {
+    btnQuickEnableTimeIn.addEventListener("click", () => quickSwitchScannerPhase(`${currentScannerSession}_IN`, btnQuickEnableTimeIn, "Switch to Time In"));
   }
 
   // Background phase label sync
@@ -599,21 +1013,7 @@ document.addEventListener("DOMContentLoaded", function() {
       const resp = await fetch("/api/kiosk-live");
       if (!resp.ok) return;
       const data = await resp.json();
-      const lbl = document.getElementById("scannerSessionLabel");
-      if (lbl && data.active_session_label) lbl.textContent = data.active_session_label;
-      if (data.session) {
-        currentScannerSession = data.session === "Afternoon" ? "AFTERNOON" : "MORNING";
-      }
-      if (scannerPhaseWarning) {
-        if (data.status === "Time Out") {
-          scannerPhaseWarning.classList.add("d-none");
-        } else {
-          if (scannerWarnModeText && data.active_session_label) {
-            scannerWarnModeText.textContent = data.active_session_label;
-          }
-          scannerPhaseWarning.classList.remove("d-none");
-        }
-      }
+      syncScannerPhaseUI(data.phase, data.active_session_label);
     } catch(e) {}
   }, 4000);
 });

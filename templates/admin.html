@@ -317,7 +317,13 @@
                   <span class="badge bg-secondary-lt">Guest</span>
                 {% endif %}
               </td>
-              <td class="small">{{ a.primary_in_fmt }}</td>
+              <td class="small">
+                {% if a.primary_in_fmt == 'Voided (No Out)' %}
+                  <span class="badge bg-warning-lt text-warning">Voided (No Out)</span>
+                {% else %}
+                  {{ a.primary_in_fmt }}
+                {% endif %}
+              </td>
               <td class="small">{{ a.primary_out_fmt }}</td>
               <td class="small">{{ a.primary_duration_min }} min</td>
               <td>
@@ -425,18 +431,26 @@
               <input type="text" class="form-control" id="cfgEventTitle" value="{{ event_title }}" maxlength="150" required>
             </div>
             <div class="col-md-6">
-              <label class="form-label fw-bold">Student Page URL <span class="text-muted fw-normal small">(Leave blank to auto-detect IP)</span></label>
-              <input type="text" class="form-control font-monospace" id="cfgKioskUrl" value="{{ kiosk_url }}" placeholder="{{ base_url }}">
+              <label class="form-label fw-bold">Student Page URL <span class="text-muted fw-normal small">(Blank = auto IP, e.g. 192.168.1.22:8080 &mdash; no https://)</span></label>
+              <input type="text" class="form-control font-monospace" id="cfgKioskUrl" value="{{ kiosk_url }}" placeholder="{{ display_url or base_url }}">
             </div>
             <div class="col-md-4">
-              <label class="form-label fw-bold">Wi-Fi Name (SSID)</label>
+              <label class="form-label fw-bold">Wi-Fi AP 1 SSID <span class="text-muted fw-normal small">(Front Rows)</span></label>
               <input type="text" class="form-control" id="cfgWifiSsid" value="{{ wifi_ssid or 'HIV Awareness Attendance' }}" maxlength="64">
             </div>
             <div class="col-md-4">
-              <label class="form-label fw-bold">Wi-Fi Password</label>
-              <input type="text" class="form-control" id="cfgWifiPassword" value="{{ wifi_password }}" placeholder="Leave blank if open" maxlength="64">
+              <label class="form-label fw-bold">Wi-Fi AP 2 SSID <span class="text-muted fw-normal small">(Optional &middot; Middle)</span></label>
+              <input type="text" class="form-control" id="cfgWifiSsid2" value="{{ wifi_ssid_2 }}" placeholder="e.g. HIV Awareness Attendance 2" maxlength="64">
             </div>
             <div class="col-md-4">
+              <label class="form-label fw-bold">Wi-Fi AP 3 SSID <span class="text-muted fw-normal small">(Optional &middot; Back)</span></label>
+              <input type="text" class="form-control" id="cfgWifiSsid3" value="{{ wifi_ssid_3 }}" placeholder="e.g. HIV Awareness Attendance 3" maxlength="64">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Wi-Fi Password <span class="text-muted fw-normal small">(Shared across APs)</span></label>
+              <input type="text" class="form-control" id="cfgWifiPassword" value="{{ wifi_password }}" placeholder="Leave blank if open" maxlength="64">
+            </div>
+            <div class="col-md-6">
               <label class="form-label fw-bold">Projector QR Visibility</label>
               <div class="d-flex gap-3 pt-2">
                 <label class="form-check">
@@ -719,15 +733,15 @@
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content shadow border-0">
       <div class="modal-header bg-aclc-blue text-white">
-        <h5 class="modal-title fw-bold">Add Attendee</h5>
+        <h5 class="modal-title fw-bold">Add Attendee &amp; Time In</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form id="formManualAdd" autocomplete="off">
         <div class="modal-body p-4">
           <div class="row g-3">
             <div class="col-md-6">
-              <label class="form-label required">Student ID</label>
-              <input type="text" class="form-control text-uppercase font-monospace" id="manStudentId" placeholder="e.g. C24-01234" maxlength="50" required>
+              <label class="form-label">Student ID <span class="text-muted fw-normal">(Optional)</span></label>
+              <input type="text" class="form-control text-uppercase font-monospace" id="manStudentId" placeholder="Leave blank for temporary NOID pass" maxlength="50">
             </div>
             <div class="col-md-6">
               <label class="form-label required">Section</label>
@@ -830,7 +844,7 @@
             </div>
             <div class="col-md-4">
               <label class="form-label required">Age</label>
-              <input type="number" class="form-control" id="editAge" min="10" max="120" required>
+              <input type="number" class="form-control" id="editAge" min="10" max="120" placeholder="Optional">
             </div>
             <div class="col-md-4">
               <label class="form-label required">Category</label>
@@ -934,6 +948,51 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" id="btnConfirmClearAll" class="btn btn-danger fw-bold" disabled>Clear All Data</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirm End-of-Day Tally & Finalize -->
+<div class="modal fade" id="modalConfirmTally" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-hiv-crimson text-white">
+        <h5 class="modal-title fw-bold">Tally &amp; Finalize Evaluation Drafts</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">
+          You are about to permanently tally and lock <strong id="tallyModalDraftCount">0</strong> unsubmitted in-progress evaluation draft(s) that contain answers.
+        </p>
+        <p class="small text-muted mb-0">
+          Students with tallied evaluations will no longer be able to edit their responses, and certificate eligibility will be recomputed immediately for all attendees.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btnExecuteTally" class="btn btn-hiv fw-bold">Tally &amp; Lock Drafts</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirm Reset Evaluation Quiz -->
+<div class="modal fade" id="modalConfirmResetQuiz" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title fw-bold">Reset Evaluation Quiz</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">
+          Reset all evaluation quiz questions back to the default template and push the update live to students?
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btnExecuteResetQuiz" class="btn btn-danger fw-bold">Reset &amp; Push Live</button>
       </div>
     </div>
   </div>
@@ -1240,8 +1299,11 @@ document.addEventListener("DOMContentLoaded", function() {
           activeBadge.className = "badge bg-green text-white fs-4 px-3 py-2";
         }
       }
-      showToast(`Updated phase: ${data.session || ""} ${data.event_status || targetPhase}`, "success");
+      const voidCount = Number(data.voided_morning_count || 0);
+      const voidNote = voidCount > 0 ? ` Voided ${voidCount} unclosed Morning Time-In(s).` : "";
+      showToast(`Updated phase: ${data.session || ""} ${data.event_status || targetPhase}.${voidNote}`, "success");
       refreshPreviewIframes();
+      refreshKpiStats();
     } else {
       showToast("Failed to update status.", "danger");
     }
@@ -1290,16 +1352,25 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // End-of-Day Tally & Finalize All Unsubmitted Drafts
   const btnTallyEvaluations = document.getElementById("btnTallyEvaluations");
+  const btnExecuteTally = document.getElementById("btnExecuteTally");
   if (btnTallyEvaluations) {
-    btnTallyEvaluations.addEventListener("click", async function() {
+    btnTallyEvaluations.addEventListener("click", function() {
       const draftCntEl = document.getElementById("btnTallyDraftCount");
-      const draftCnt = draftCntEl ? draftCntEl.textContent.trim() : "all";
-      if (!confirm(`Tally and permanently lock ${draftCnt} unsubmitted evaluation draft(s)? Students will no longer be able to edit them.`)) {
+      const draftCnt = parseInt(draftCntEl ? draftCntEl.textContent.trim() : "0", 10) || 0;
+      if (draftCnt <= 0) {
+        showToast("No unsubmitted evaluation drafts with answers to tally.", "info");
         return;
       }
-      btnTallyEvaluations.disabled = true;
-      const origHtml = btnTallyEvaluations.innerHTML;
-      btnTallyEvaluations.textContent = "Tallying & Finalizing...";
+      const cntDisplay = document.getElementById("tallyModalDraftCount");
+      if (cntDisplay) cntDisplay.textContent = String(draftCnt);
+      window.openModalById("modalConfirmTally");
+    });
+  }
+  if (btnExecuteTally) {
+    btnExecuteTally.addEventListener("click", async function() {
+      btnExecuteTally.disabled = true;
+      btnExecuteTally.textContent = "Tallying & Finalizing...";
+      if (btnTallyEvaluations) btnTallyEvaluations.disabled = true;
 
       try {
         const resp = await fetch("/api/admin/tally-evaluations", {
@@ -1308,18 +1379,20 @@ document.addEventListener("DOMContentLoaded", function() {
         });
         if (checkAuthRedirect(resp)) return;
         const data = await resp.json();
+        window.closeModalById("modalConfirmTally");
         if (resp.ok && data.status === "success") {
           showToast(data.message || "Tallied all in-progress evaluations.", "success");
-          await refreshKpiStats();
         } else {
           showToast(data.message || "Failed to tally evaluations.", "danger");
         }
       } catch(e) {
+        window.closeModalById("modalConfirmTally");
         showToast("Network error tallying evaluations.", "danger");
       } finally {
-        btnTallyEvaluations.disabled = false;
-        btnTallyEvaluations.innerHTML = origHtml;
-        await refreshKpiStats();
+        btnExecuteTally.disabled = false;
+        btnExecuteTally.textContent = "Tally & Lock Drafts";
+        if (btnTallyEvaluations) btnTallyEvaluations.disabled = false;
+        setTimeout(() => refreshKpiStats(), 180);
       }
     });
   }
@@ -1361,6 +1434,10 @@ document.addEventListener("DOMContentLoaded", function() {
       const titleVal = document.getElementById("cfgEventTitle").value.trim();
       const urlVal = document.getElementById("cfgKioskUrl").value.trim();
       const ssidVal = document.getElementById("cfgWifiSsid").value.trim();
+      const ssid2El = document.getElementById("cfgWifiSsid2");
+      const ssid3El = document.getElementById("cfgWifiSsid3");
+      const ssid2Val = ssid2El ? ssid2El.value.trim() : "";
+      const ssid3Val = ssid3El ? ssid3El.value.trim() : "";
       const passVal = document.getElementById("cfgWifiPassword").value.trim();
       const showWifi = document.getElementById("cfgShowWifiQr").checked;
       const showForm = document.getElementById("cfgShowFormQr").checked;
@@ -1373,7 +1450,7 @@ document.addEventListener("DOMContentLoaded", function() {
           body: JSON.stringify({
             event_title: titleVal,
             active_session_label: "{{ active_session_label }}",
-            current_phase: "{{ current_phase }}",
+            current_phase: "",
             event_date: "{{ event_date }}",
             venue: "{{ venue }}",
             kiosk_announcement: annVal,
@@ -1389,6 +1466,8 @@ document.addEventListener("DOMContentLoaded", function() {
             proj_show_form_qr: showForm,
             proj_show_wifi_qr: showWifi,
             wifi_ssid: ssidVal,
+            wifi_ssid_2: ssid2Val,
+            wifi_ssid_3: ssid3Val,
             wifi_password: passVal,
             kiosk_url: urlVal,
             proj_announcement: annVal
@@ -1420,23 +1499,28 @@ document.addEventListener("DOMContentLoaded", function() {
 
   function filterTable() {
     const q = tableSearch.value.toLowerCase();
-    const lvl = filterLevel.value.toLowerCase();
+    const lvl = filterLevel.value.toUpperCase();
     const st = filterStatus ? filterStatus.value : "";
     const rows = tableBody.getElementsByTagName("tr");
     for (let row of rows) {
       if (row.id === "emptyTableRow") continue;
+      const cells = row.cells;
       const text = row.innerText.toLowerCase();
       const matchQ = text.includes(q);
-      const matchL = lvl === "" || text.includes(lvl);
+      const catTxt = (cells[3] ? cells[3].innerText : "").trim().toLowerCase();
+      let matchL = true;
+      if (lvl === "SHS") matchL = catTxt === "shs";
+      else if (lvl === "COLLEGE") matchL = catTxt === "college";
+      else if (lvl === "NON_STUDENT") matchL = catTxt === "guest";
+
       let matchS = true;
       if (st) {
-        const cells = row.cells;
         const sidTxt = (cells[0] ? cells[0].innerText : "").trim().toLowerCase();
         const outTxt = (cells[5] ? cells[5].innerText : "").trim().toLowerCase();
         const evalTxt = (cells[7] ? cells[7].innerText : "").trim().toLowerCase();
         const certTxt = (cells[8] ? cells[8].innerText : "").trim().toLowerCase();
         if (st === "eligible") matchS = certTxt.includes("approved");
-        else if (st === "missing_out") matchS = (outTxt === "-" || outTxt === "--" || outTxt === "—" || certTxt.includes("needs time-out"));
+        else if (st === "missing_out") matchS = (outTxt === "-" || outTxt === "--" || outTxt === "—" || outTxt.endsWith("/ -") || certTxt.includes("needs time-out"));
         else if (st === "eval_pending") matchS = (evalTxt.includes("pending") || evalTxt.includes("in progress"));
         else if (st === "noid") matchS = sidTxt.startsWith("noid-");
       }
@@ -1495,6 +1579,19 @@ document.addEventListener("DOMContentLoaded", function() {
           return;
         }
         const ev = data.evaluation;
+        const draftObj = data.draft || {};
+        const schemaObj = data.schema || {};
+        const stdKeys = new Set(["q1_1","q1_2","q1_3","q1_4","q1_5","q1_6","q1_7","q1_8","q1_9","q1_10","q2_1","q2_2","q2_3","q3_1","q3_2","q3_3"]);
+        const customRowsHtml = [];
+        ["part1", "part2", "part3"].forEach(pk => {
+          (schemaObj[pk] || []).forEach(it => {
+            if (it && it.id && !stdKeys.has(it.id)) {
+              const ans = draftObj[it.id];
+              const disp = (ans !== null && ans !== undefined && String(ans).trim() !== "") ? escapeAttr(ans) : "-";
+              customRowsHtml.push(`<div class="small mb-2"><strong>${escapeAttr(it.text || it.id)}:</strong><div class="p-2 bg-light rounded border mt-1">${disp}</div></div>`);
+            }
+          });
+        });
         bodyEl.innerHTML = `
           <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
             <div>
@@ -1523,7 +1620,8 @@ document.addEventListener("DOMContentLoaded", function() {
           <h5 class="fw-bold text-hiv-crimson mb-2">III. Overall Assessment</h5>
           <div class="small mb-2"><strong>1. Most helpful part:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q3_1 || '-')}</div></div>
           <div class="small mb-2"><strong>2. Topics to learn more about:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q3_2 || '-')}</div></div>
-          <div class="small"><strong>3. Suggestions for improvement:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q3_3 || '-')}</div></div>
+          <div class="small ${customRowsHtml.length ? 'mb-3' : ''}"><strong>3. Suggestions for improvement:</strong><div class="p-2 bg-light rounded border mt-1">${escapeAttr(ev.q3_3 || '-')}</div></div>
+          ${customRowsHtml.length ? `<h5 class="fw-bold text-hiv-crimson mb-2">IV. Custom Questions</h5>${customRowsHtml.join("")}` : ""}
         `;
       } catch(err) {
         bodyEl.innerHTML = `<div class="text-danger text-center py-3">Error loading evaluation details.</div>`;
@@ -1538,7 +1636,8 @@ document.addEventListener("DOMContentLoaded", function() {
       document.getElementById("editFirstName").value = editBtn.getAttribute("data-first-name") || "";
       document.getElementById("editMiddleName").value = editBtn.getAttribute("data-middle-name") || "";
       document.getElementById("editSex").value = editBtn.getAttribute("data-sex") || "Male";
-      document.getElementById("editAge").value = editBtn.getAttribute("data-age") || "18";
+      const rawEditAge = editBtn.getAttribute("data-age");
+      document.getElementById("editAge").value = (rawEditAge && rawEditAge !== "0") ? rawEditAge : "";
       document.getElementById("editLevel").value = editBtn.getAttribute("data-level") || "SHS";
       document.getElementById("editSection").value = editBtn.getAttribute("data-section") || "";
       document.getElementById("editEmail").value = editBtn.getAttribute("data-email") || "";
@@ -1598,7 +1697,7 @@ document.addEventListener("DOMContentLoaded", function() {
         manualAddAlert.textContent = data.message || "Failed to add attendee.";
         manualAddAlert.className = "small mt-3 text-danger fw-bold";
       } else {
-        showToast("Attendee added.", "success");
+        showToast(data.message || "Attendee added.", "success");
         setTimeout(() => window.location.reload(), 500);
       }
     });
@@ -1614,7 +1713,7 @@ document.addEventListener("DOMContentLoaded", function() {
         first_name: document.getElementById("editFirstName").value.trim(),
         middle_name: document.getElementById("editMiddleName").value.trim() || "N/A",
         sex: document.getElementById("editSex").value,
-        age: parseInt(document.getElementById("editAge").value, 10),
+        age: document.getElementById("editAge").value.trim() ? parseInt(document.getElementById("editAge").value, 10) : 0,
         level: document.getElementById("editLevel").value,
         section: document.getElementById("editSection").value.trim(),
         email: document.getElementById("editEmail").value.trim().toLowerCase(),
@@ -1689,7 +1788,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <td class="fw-bold">${escapeAttr(a.full_name)}</td>
         <td><span class="badge bg-secondary-lt">${escapeAttr(a.section)}</span></td>
         <td>${catBadge}</td>
-        <td class="small">${escapeAttr(a.primary_in_fmt)}</td>
+        <td class="small">${a.primary_in_fmt === "Voided (No Out)" ? '<span class="badge bg-warning-lt text-warning">Voided (No Out)</span>' : escapeAttr(a.primary_in_fmt)}</td>
         <td class="small">${escapeAttr(a.primary_out_fmt)}</td>
         <td class="small">${escapeAttr(a.primary_duration_min)} min</td>
         <td>${evalBadge}</td>
@@ -1736,6 +1835,7 @@ document.addEventListener("DOMContentLoaded", function() {
   async function refreshKpiStats() {
     try {
       const resp = await fetch("/api/admin/live-feed");
+      if (checkAuthRedirect(resp)) return;
       if (!resp.ok) return;
       const payload = await resp.json();
       const data = payload.stats;
@@ -1956,6 +2056,14 @@ document.addEventListener("DOMContentLoaded", function() {
   if (btnSaveQuizSchema) {
     btnSaveQuizSchema.addEventListener("click", async function() {
       syncInputsToAdminQuizSchema();
+      const enabledCount = ["part1", "part2", "part3"].reduce((acc, pk) => {
+        const items = adminQuizSchema[pk] || [];
+        return acc + items.filter(it => it && it.enabled !== false && String(it.text || "").trim() !== "").length;
+      }, 0);
+      if (enabledCount === 0) {
+        showToast("At least one active question is required in the evaluation quiz.", "danger");
+        return;
+      }
       btnSaveQuizSchema.disabled = true;
       btnSaveQuizSchema.textContent = "Pushing Live...";
       try {
@@ -1964,6 +2072,7 @@ document.addEventListener("DOMContentLoaded", function() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(adminQuizSchema)
         });
+        if (checkAuthRedirect(resp)) return;
         const data = await resp.json();
         if (resp.ok && data.status === "success") {
           adminQuizSchema = data.schema;
@@ -1982,19 +2091,34 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
   const btnResetQuizSchema = document.getElementById("btnResetQuizSchema");
+  const btnExecuteResetQuiz = document.getElementById("btnExecuteResetQuiz");
   if (btnResetQuizSchema) {
-    btnResetQuizSchema.addEventListener("click", async function() {
-      if (!confirm("Reset all quiz questions back to the default template?")) return;
+    btnResetQuizSchema.addEventListener("click", function() {
+      window.openModalById("modalConfirmResetQuiz");
+    });
+  }
+  if (btnExecuteResetQuiz) {
+    btnExecuteResetQuiz.addEventListener("click", async function() {
+      btnExecuteResetQuiz.disabled = true;
+      btnExecuteResetQuiz.textContent = "Resetting...";
       try {
         const resp = await fetch("/api/admin/evaluation/schema/reset", { method: "POST" });
+        if (checkAuthRedirect(resp)) return;
         const data = await resp.json();
+        window.closeModalById("modalConfirmResetQuiz");
         if (resp.ok && data.status === "success") {
           adminQuizSchema = data.schema;
           renderAdminQuizEditor();
           showToast("Quiz reset to default and pushed live.", "success");
+        } else {
+          showToast(data.detail || "Failed to reset quiz.", "danger");
         }
       } catch(e) {
+        window.closeModalById("modalConfirmResetQuiz");
         showToast("Failed to reset quiz.", "danger");
+      } finally {
+        btnExecuteResetQuiz.disabled = false;
+        btnExecuteResetQuiz.textContent = "Reset & Push Live";
       }
     });
   }

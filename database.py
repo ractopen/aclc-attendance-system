@@ -37,6 +37,49 @@ def normalize_level(raw_level: Optional[str]) -> str:
         return "NON_STUDENT"
     return val if val in ("SHS", "COLLEGE", "NON_STUDENT") else "SHS"
 
+_SECTIONS_SEED_CACHE: Optional[Dict[str, Any]] = None
+
+def load_sections_seed() -> Dict[str, Any]:
+    """Loads sections_seed.json from the project root (cross-platform Linux/Windows)."""
+    global _SECTIONS_SEED_CACHE
+    if _SECTIONS_SEED_CACHE is not None:
+        return _SECTIONS_SEED_CACHE
+    seed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sections_seed.json")
+    default_seed: Dict[str, Any] = {"shs": {"Grade 11": [], "Grade 12": []}, "college": [], "non_student": []}
+    try:
+        if os.path.exists(seed_path):
+            with open(seed_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    _SECTIONS_SEED_CACHE = {
+                        "shs": data.get("shs") or {"Grade 11": [], "Grade 12": []},
+                        "college": data.get("college") or [],
+                        "non_student": data.get("non_student") or []
+                    }
+                    return _SECTIONS_SEED_CACHE
+    except Exception:
+        pass
+    _SECTIONS_SEED_CACHE = default_seed
+    return _SECTIONS_SEED_CACHE
+
+def _get_shs_seed_lookup() -> Dict[str, Tuple[str, str]]:
+    """Maps uppercase SHS section code -> (grade, strand) from sections_seed.json."""
+    seed = load_sections_seed()
+    lookup: Dict[str, Tuple[str, str]] = {}
+    shs = seed.get("shs") or {}
+    for grade_label, items in shs.items():
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                code = (item.get("code") or "").strip().upper()
+                strand = (item.get("strand") or "").strip()
+                if code:
+                    lookup[code] = (grade_label, strand)
+            elif isinstance(item, str) and item.strip():
+                lookup[item.strip().upper()] = (grade_label, "")
+    return lookup
+
 def infer_academic_details(
     level: str,
     section: str,
@@ -46,21 +89,22 @@ def infer_academic_details(
     course: Optional[str] = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
-    Infers shs_grade, strand, college_year, and course from section keywords
+    Infers shs_grade, strand, college_year, and course from sections_seed.json or section keywords
     when not explicitly supplied by the form payload.
     """
     norm_level = normalize_level(level)
     sec_up = (section or "").strip().upper()
 
     if norm_level == "SHS":
-        inferred_grade = shs_grade
+        seed_grade, seed_strand = _get_shs_seed_lookup().get(sec_up, ("", ""))
+        inferred_grade = shs_grade or seed_grade or None
         if not inferred_grade:
             if re.search(r"(?:^|\b|G|GRADE\s*)11(?:\b|-|_)", sec_up):
                 inferred_grade = "Grade 11"
             elif re.search(r"(?:^|\b|G|GRADE\s*)12(?:\b|-|_)", sec_up):
                 inferred_grade = "Grade 12"
 
-        inferred_strand = strand
+        inferred_strand = strand or seed_strand or None
         if not inferred_strand:
             if "STEM" in sec_up:
                 inferred_strand = "STEM"
@@ -174,6 +218,8 @@ def init_db():
         cursor.execute("ALTER TABLE attendees ADD COLUMN cert_emailed_at TIMESTAMP;")
     if "cert_email_error" not in existing_cols:
         cursor.execute("ALTER TABLE attendees ADD COLUMN cert_email_error TEXT DEFAULT '';")
+    if "morning_voided" not in existing_cols:
+        cursor.execute("ALTER TABLE attendees ADD COLUMN morning_voided INTEGER DEFAULT 0;")
 
     # Recover any rows left in SENDING state if the server crashed mid-send
     cursor.execute("""
@@ -431,7 +477,9 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
     raw_middle = (data.get("middle_name") or "").strip()
     middle_name = "N/A" if (not raw_middle or raw_middle.upper() in ("N/A", "NA", "NONE", "-")) else raw_middle
     full_name = compute_full_name(last_name, first_name, middle_name)
-    sex = data["sex"].strip()
+    sex = (data.get("sex") or "").strip() or "Unspecified"
+    raw_age = data.get("age")
+    age_val = int(raw_age) if raw_age not in (None, "", 0) else 0
     level = normalize_level(data["level"])
     shs_grade, strand, college_year, course = infer_academic_details(
         level, section,
@@ -490,11 +538,11 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
                     id_type = ?, last_name = ?, first_name = ?, middle_name = ?, full_name = ?,
                     sex = ?, age = ?, email = ?, level = ?,
                     shs_grade = ?, strand = ?, college_year = ?, course = ?, section = ?,
-                    ip_address = ?, device_info = ?, morning_in = ?
+                    ip_address = ?, device_info = ?, morning_in = ?, morning_voided = 0
                 WHERE student_id = ?
             """, (
                 id_type, last_name, first_name, middle_name, full_name,
-                sex, data["age"], email, level,
+                sex, age_val, email, level,
                 shs_grade, strand, college_year, course, section,
                 ip_address, device_info, now_iso, student_id
             ))
@@ -508,7 +556,7 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 student_id, id_type, last_name, first_name, middle_name, full_name,
-                sex, data["age"], email, level,
+                sex, age_val, email, level,
                 shs_grade, strand, college_year, course, section,
                 ip_address, device_info, now_iso
             ))
@@ -537,7 +585,7 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
                 WHERE student_id = ?
             """, (
                 id_type, last_name, first_name, middle_name, full_name,
-                sex, data["age"], email, level,
+                sex, age_val, email, level,
                 shs_grade, strand, college_year, course, section,
                 ip_address, device_info, now_iso, student_id
             ))
@@ -551,7 +599,7 @@ def register_time_in(data: Dict[str, Any], phase: str, ip_address: str = "", dev
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 student_id, id_type, last_name, first_name, middle_name, full_name,
-                sex, data["age"], email, level,
+                sex, age_val, email, level,
                 shs_grade, strand, college_year, course, section,
                 ip_address, device_info, now_iso
             ))
@@ -592,22 +640,21 @@ def register_time_out(student_id: str, phase: str, min_duration: float, ip_addre
         conn.close()
         return {"status": "error", "message": "Time Out is not open yet"}
 
-    # Determine which session slot to check out (supports whole-day Morning-In -> Afternoon-Out seamlessly)
+    # Strictly separate Morning and Afternoon sessions:
+    # Morning Time In pairs only with Morning Time Out; Afternoon Time In pairs only with Afternoon Time Out.
     target_slot = None
     if phase == "MORNING_OUT":
         if row["morning_in"]:
             target_slot = "MORNING"
-        elif row["afternoon_in"]:
-            target_slot = "AFTERNOON"
+        else:
+            conn.close()
+            return {"status": "error", "message": "No Morning Time In record found for this attendee."}
     elif phase == "AFTERNOON_OUT":
         if row["afternoon_in"]:
             target_slot = "AFTERNOON"
-        elif row["morning_in"]:
-            target_slot = "MORNING"
-
-    if not target_slot:
-        conn.close()
-        return {"status": "error", "message": "No Time In record found for this attendee."}
+        else:
+            conn.close()
+            return {"status": "error", "message": "No Afternoon Time In record found. Please record Afternoon Time In first."}
 
     if target_slot == "MORNING":
         if row["morning_out"]:
@@ -684,6 +731,7 @@ def register_time_out(student_id: str, phase: str, min_duration: float, ip_addre
         "message": f"Timed out at {format_time_str(now_iso)} ({round(total_dur)} min)",
         "student_name": row["full_name"],
         "student_id": student_id,
+        "section": row["section"],
         "duration_min": total_dur,
         "attendance_eligible": elig_info["attendance_eligible"],
         "eval_status": elig_info["eval_status"],
@@ -693,6 +741,122 @@ def register_time_out(student_id: str, phase: str, min_duration: float, ip_addre
         "time": now_iso,
         "time_fmt": format_time_str(now_iso)
     }
+
+
+def scanner_record_time_in(student_id: str, phase: str, ip_address: str = "") -> Dict[str, Any]:
+    """Admin/Officer QR or manual Time-In for an already-registered attendee during MORNING_IN or AFTERNOON_IN."""
+    if phase not in ("MORNING_IN", "AFTERNOON_IN"):
+        return {"status": "error", "message": "Time In is currently closed."}
+
+    sid = student_id.strip().upper()
+    conn = get_db()
+    cursor = conn.cursor()
+    row = cursor.execute("SELECT * FROM attendees WHERE UPPER(student_id) = ?", (sid,)).fetchone()
+    if not row:
+        conn.close()
+        return {
+            "status": "not_found",
+            "student_id": sid,
+            "message": f"Student ID '{sid}' not found. Use 'Add Attendee & Time In' or register on the Student Kiosk first."
+        }
+
+    now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    slot_col = "morning_in" if phase == "MORNING_IN" else "afternoon_in"
+    session_label = "Morning" if phase == "MORNING_IN" else "Afternoon"
+
+    if row[slot_col]:
+        conn.close()
+        return {
+            "status": "already_timed_in",
+            "message": f"Already timed in for {session_label} at {format_time_str(row[slot_col])}",
+            "student_name": row["full_name"],
+            "student_id": row["student_id"],
+            "section": row["section"],
+            "session_label": session_label,
+            "time": row[slot_col],
+            "time_fmt": format_time_str(row[slot_col]),
+            "eval_status": row["eval_status"] or "PENDING",
+            "is_eligible": bool(row["is_eligible"]),
+            "cert_status": row["cert_status"] or "PENDING",
+            "morning_voided": bool(row["morning_voided"]) if "morning_voided" in row.keys() else False,
+        }
+
+    if phase == "MORNING_IN":
+        cursor.execute(
+            "UPDATE attendees SET morning_in = ?, morning_voided = 0 WHERE UPPER(student_id) = ?",
+            (now_iso, sid)
+        )
+    else:
+        cursor.execute(
+            "UPDATE attendees SET afternoon_in = ? WHERE UPPER(student_id) = ?",
+            (now_iso, sid)
+        )
+
+    min_dur = float(get_setting("min_duration_minutes", "150") or "150")
+    elig_info = recompute_attendee_eligibility(cursor, row["student_id"], min_dur)
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "success",
+        "message": f"{session_label} Time In recorded at {format_time_str(now_iso)}",
+        "student_name": row["full_name"],
+        "student_id": row["student_id"],
+        "section": row["section"],
+        "session_label": session_label,
+        "time": now_iso,
+        "time_fmt": format_time_str(now_iso),
+        "duration_min": elig_info["duration_min"],
+        "attendance_eligible": elig_info["attendance_eligible"],
+        "eval_status": elig_info["eval_status"],
+        "is_eligible": elig_info["is_eligible"],
+        "cert_status": elig_info["cert_status"],
+        "morning_voided": bool(row["morning_voided"]) if ("morning_voided" in row.keys() and phase != "MORNING_IN") else False,
+    }
+
+
+def void_unclosed_morning_time_ins(min_duration: Optional[float] = None) -> int:
+    """
+    Voids any unclosed morning Time-In (morning_in present but morning_out missing)
+    when moving to Afternoon sessions so attendees must check in again for Afternoon.
+    Completed morning sessions (morning_in + morning_out) remain intact.
+    """
+    if min_duration is None:
+        min_duration = float(get_setting("min_duration_minutes", "150") or "150")
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("BEGIN IMMEDIATE")
+        affected = cursor.execute("""
+            SELECT student_id FROM attendees
+            WHERE morning_in IS NOT NULL AND morning_in != ''
+              AND (morning_out IS NULL OR morning_out = '')
+        """).fetchall()
+        if not affected:
+            conn.rollback()
+            conn.close()
+            return 0
+
+        cursor.execute("""
+            UPDATE attendees
+            SET morning_in = NULL,
+                morning_duration_min = 0,
+                morning_voided = 1
+            WHERE morning_in IS NOT NULL AND morning_in != ''
+              AND (morning_out IS NULL OR morning_out = '')
+        """)
+        for r in affected:
+            recompute_attendee_eligibility(cursor, r["student_id"], min_duration)
+        conn.commit()
+        conn.close()
+        return len(affected)
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        conn.close()
+        return 0
 
 # =====================================================================
 # =====================================================================
@@ -725,9 +889,7 @@ DEFAULT_EVAL_QUIZ_SCHEMA: Dict[str, List[Dict[str, Any]]] = {
 }
 
 
-def get_eval_quiz_schema() -> Dict[str, List[Dict[str, Any]]]:
-    """Returns the active evaluation quiz schema from settings, or default copy."""
-    raw = get_setting("eval_quiz_schema", "")
+def _parse_eval_quiz_schema(raw: Optional[str]) -> Dict[str, List[Dict[str, Any]]]:
     if raw:
         try:
             parsed = json.loads(raw)
@@ -736,6 +898,17 @@ def get_eval_quiz_schema() -> Dict[str, List[Dict[str, Any]]]:
         except Exception:
             pass
     return json.loads(json.dumps(DEFAULT_EVAL_QUIZ_SCHEMA))
+
+
+def get_eval_quiz_schema() -> Dict[str, List[Dict[str, Any]]]:
+    """Returns the active evaluation quiz schema from settings, or default copy."""
+    return _parse_eval_quiz_schema(get_setting("eval_quiz_schema", ""))
+
+
+def _get_eval_quiz_schema_from_cursor(cursor) -> Dict[str, List[Dict[str, Any]]]:
+    """Reads the active evaluation quiz schema using an existing DB cursor/transaction."""
+    row = cursor.execute("SELECT value FROM settings WHERE key = 'eval_quiz_schema'").fetchone()
+    return _parse_eval_quiz_schema(row["value"] if row else "")
 
 
 def save_eval_quiz_schema(raw_schema: Dict[str, Any]) -> Tuple[Dict[str, List[Dict[str, Any]]], int]:
@@ -779,39 +952,90 @@ def reset_eval_quiz_schema() -> Tuple[Dict[str, List[Dict[str, Any]]], int]:
 # SEMINAR EVALUATION FORM: LOCKING, AUTO-SAVE, SUBMIT & TALLY FUNCTIONS
 # =====================================================================
 
-def _sanitize_draft_payload(raw_draft: Dict[str, Any]) -> Dict[str, Any]:
-    """Sanitizes and normalizes rating (q1_1..q1_10) and open-ended (q2_1..q3_3) draft fields."""
+def _sanitize_draft_payload(
+    raw_draft: Dict[str, Any],
+    schema: Optional[Dict[str, List[Dict[str, Any]]]] = None
+) -> Dict[str, Any]:
+    """Sanitizes and normalizes rating, open-ended, and custom evaluation draft fields."""
     clean: Dict[str, Any] = {}
-    for i in range(1, 11):
-        k = f"q1_{i}"
-        val = raw_draft.get(k)
+    raw_draft = raw_draft or {}
+
+    # Preserve client timestamp for accurate cross-device draft conflict resolution
+    raw_ts = raw_draft.get("_ts")
+    if raw_ts is not None:
+        try:
+            ts_val = int(float(raw_ts))
+            if ts_val > 0:
+                clean["_ts"] = ts_val
+        except Exception:
+            pass
+
+    def _parse_rating(val: Any) -> Optional[int]:
         if val is not None and str(val).strip() != "":
             try:
                 iv = int(val)
                 if 1 <= iv <= 5:
-                    clean[k] = iv
-                else:
-                    clean[k] = None
+                    return iv
             except Exception:
-                clean[k] = None
-        else:
-            clean[k] = None
+                pass
+        return None
+
+    def _parse_text(val: Any) -> str:
+        if val is None:
+            return ""
+        return re.sub(r"[<>]", "", str(val)).strip()[:2000]
+
+    for i in range(1, 11):
+        k = f"q1_{i}"
+        clean[k] = _parse_rating(raw_draft.get(k))
 
     for part in (2, 3):
         for j in range(1, 4):
             k = f"q{part}_{j}"
-            val = raw_draft.get(k)
-            if val is not None:
-                s = re.sub(r"[<>]", "", str(val)).strip()
-                clean[k] = s[:2000]
-            else:
-                clean[k] = ""
+            clean[k] = _parse_text(raw_draft.get(k))
 
-    # Preserve custom real-time added questions (c_*)
-    custom_ratings = []
+    schema_types: Dict[str, str] = {}
+    enabled_items: List[Tuple[str, str]] = []
+    if schema:
+        for part_key in ("part1", "part2", "part3"):
+            for item in schema.get(part_key, []):
+                if not isinstance(item, dict):
+                    continue
+                qid = str(item.get("id") or "")
+                qtype = "rating" if item.get("type") == "rating" else "text"
+                if qid:
+                    schema_types[qid] = qtype
+                    if item.get("enabled", True):
+                        enabled_items.append((qid, qtype))
+
+    # Preserve custom or dynamic schema questions according to their configured type
+    standard_keys = {f"q1_{i}" for i in range(1, 11)} | {f"q{p}_{j}" for p in (2, 3) for j in range(1, 4)}
+    reserved_keys = {"_ts", "q1_avg", "answered_count"}
+    custom_ratings: List[int] = []
     custom_answered = 0
+
     for k, val in raw_draft.items():
-        if isinstance(k, str) and k.startswith("c_") and re.match(r"^c_[a-zA-Z0-9_]{1,38}$", k):
+        if not isinstance(k, str) or k in standard_keys or k in reserved_keys:
+            continue
+        is_schema_key = k in schema_types
+        is_custom_key = k.startswith("c_") and bool(re.match(r"^c_[a-zA-Z0-9_]{1,38}$", k))
+        if not (is_schema_key or is_custom_key):
+            continue
+
+        if is_schema_key:
+            qtype = schema_types[k]
+            if qtype == "rating":
+                iv = _parse_rating(val)
+                clean[k] = iv
+                if iv is not None:
+                    custom_ratings.append(iv)
+                    custom_answered += 1
+            else:
+                s = _parse_text(val)
+                clean[k] = s
+                if s:
+                    custom_answered += 1
+        else:
             if val is not None and str(val).strip() != "":
                 if isinstance(val, int) or (isinstance(val, str) and val.strip().isdigit() and 1 <= int(val.strip()) <= 5):
                     iv = int(val)
@@ -820,19 +1044,32 @@ def _sanitize_draft_payload(raw_draft: Dict[str, Any]) -> Dict[str, Any]:
                         custom_ratings.append(iv)
                         custom_answered += 1
                         continue
-                s = re.sub(r"[<>]", "", str(val)).strip()[:2000]
+                s = _parse_text(val)
                 clean[k] = s
                 if s:
                     custom_answered += 1
             else:
                 clean[k] = ""
 
-    ratings = [clean[f"q1_{i}"] for i in range(1, 11) if clean.get(f"q1_{i}") is not None]
-    all_ratings = ratings + custom_ratings
-    clean["q1_avg"] = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0.0
-    clean["answered_count"] = len(ratings) + sum(
-        1 for part in (2, 3) for j in range(1, 4) if clean.get(f"q{part}_{j}", "").strip() != ""
-    ) + custom_answered
+    if schema and enabled_items:
+        active_ratings = [
+            clean[qid] for qid, qtype in enabled_items
+            if qtype == "rating" and clean.get(qid) is not None
+        ]
+        active_answered = sum(
+            1 for qid, qtype in enabled_items
+            if (clean.get(qid) is not None if qtype == "rating" else str(clean.get(qid) or "").strip() != "")
+        )
+        clean["q1_avg"] = round(sum(active_ratings) / len(active_ratings), 2) if active_ratings else 0.0
+        clean["answered_count"] = active_answered
+    else:
+        ratings = [clean[f"q1_{i}"] for i in range(1, 11) if clean.get(f"q1_{i}") is not None]
+        all_ratings = ratings + custom_ratings
+        clean["q1_avg"] = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0.0
+        clean["answered_count"] = len(ratings) + sum(
+            1 for part in (2, 3) for j in range(1, 4) if clean.get(f"q{part}_{j}", "").strip() != ""
+        ) + custom_answered
+
     return clean
 
 def _is_lock_active(lock_expires_at: Optional[str], now: datetime) -> Tuple[bool, int]:
@@ -974,12 +1211,13 @@ def autosave_evaluation_draft(
     """
     sid = student_id.strip().upper()
     sess = session_id.strip()
-    clean = _sanitize_draft_payload(draft or {})
 
     conn = get_db()
     cursor = conn.cursor()
     try:
         cursor.execute("BEGIN IMMEDIATE")
+        schema = _get_eval_quiz_schema_from_cursor(cursor)
+        clean = _sanitize_draft_payload(draft or {}, schema=schema)
         attendee = cursor.execute("SELECT * FROM attendees WHERE UPPER(student_id) = ?", (sid,)).fetchone()
         if not attendee:
             conn.rollback()
@@ -1096,7 +1334,8 @@ def release_evaluation_lock(
         # Only the lock owner (or if lock already expired) can release/update draft
         if not holder or holder == sess or not is_locked:
             if draft is not None:
-                clean = _sanitize_draft_payload(draft)
+                schema = _get_eval_quiz_schema_from_cursor(cursor)
+                clean = _sanitize_draft_payload(draft, schema=schema)
                 cursor.execute("""
                     UPDATE evaluations SET
                         draft_json = ?,
@@ -1152,31 +1391,6 @@ def submit_evaluation(
     """
     sid = student_id.strip().upper()
     sess = session_id.strip()
-    clean = _sanitize_draft_payload(answers or {})
-
-    # Validate all 10 Likert ratings
-    for i in range(1, 11):
-        if clean.get(f"q1_{i}") is None:
-            return {"status": "error", "message": f"Please select a rating (1 to 5) for Statement #{i} in Part I."}
-
-    # Validate all 6 open-ended questions
-    part_ii_labels = [
-        "II.1 (Important information learned)",
-        "II.2 (Misconception clarified)",
-        "II.3 (Application in daily life)"
-    ]
-    for j in range(1, 4):
-        if not clean.get(f"q2_{j}", "").strip():
-            return {"status": "error", "message": f"Please provide an answer for {part_ii_labels[j-1]}."}
-
-    part_iii_labels = [
-        "III.1 (Most helpful part of the seminar)",
-        "III.2 (Topics to learn more about)",
-        "III.3 (Suggestions for future seminars)"
-    ]
-    for j in range(1, 4):
-        if not clean.get(f"q3_{j}", "").strip():
-            return {"status": "error", "message": f"Please provide an answer for {part_iii_labels[j-1]}."}
 
     conn = get_db()
     cursor = conn.cursor()
@@ -1220,6 +1434,33 @@ def submit_evaluation(
                     "message": "Another session currently holds priority for this evaluation.",
                     "retry_after_seconds": rem_sec
                 }
+
+        schema = _get_eval_quiz_schema_from_cursor(cursor)
+        clean = _sanitize_draft_payload(answers or {}, schema=schema)
+
+        # Validate all currently enabled questions in the active quiz schema
+        section_labels = [
+            ("part1", "Part I"),
+            ("part2", "Part II (Learning Outcomes)"),
+            ("part3", "Part III (Overall Assessment)")
+        ]
+        for sec_key, sec_label in section_labels:
+            enabled_items = [it for it in (schema.get(sec_key) or []) if isinstance(it, dict) and it.get("enabled", True)]
+            for idx, item in enumerate(enabled_items):
+                qid = str(item.get("id") or "")
+                qtype = item.get("type", "text")
+                if qtype == "rating":
+                    if clean.get(qid) is None:
+                        conn.rollback()
+                        conn.close()
+                        return {"status": "error", "message": f"Please select a rating (1 to 5) for Question #{idx + 1} in {sec_label}."}
+                else:
+                    if not str(clean.get(qid) or "").strip():
+                        conn.rollback()
+                        conn.close()
+                        return {"status": "error", "message": f"Please provide an answer for Question #{idx + 1} in {sec_label}."}
+
+        if eval_row:
 
             cursor.execute("""
                 UPDATE evaluations SET
@@ -1310,6 +1551,7 @@ def finalize_and_tally_incomplete_evaluations() -> Dict[str, Any]:
         min_dur_row = cursor.execute("SELECT value FROM settings WHERE key = 'min_duration_minutes'").fetchone()
         min_dur = float(min_dur_row["value"]) if min_dur_row else 150.0
 
+        schema = _get_eval_quiz_schema_from_cursor(cursor)
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         in_prog_rows = cursor.execute("SELECT * FROM evaluations WHERE status = 'IN_PROGRESS'").fetchall()
 
@@ -1322,7 +1564,7 @@ def finalize_and_tally_incomplete_evaluations() -> Dict[str, Any]:
                 draft = json.loads(er["draft_json"] or "{}")
             except Exception:
                 draft = {}
-            clean = _sanitize_draft_payload(draft)
+            clean = _sanitize_draft_payload(draft, schema=schema)
 
             if clean["answered_count"] > 0:
                 cursor.execute("""
@@ -1389,13 +1631,19 @@ def get_passes_live_status(student_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         return {}
 
     min_dur = float(get_setting("min_duration_minutes", "150") or "150")
+    schema = get_eval_quiz_schema()
+    total_questions = sum(
+        1 for pk in ("part1", "part2", "part3")
+        for it in (schema.get(pk) or [])
+        if isinstance(it, dict) and it.get("enabled", True)
+    )
     placeholders = ",".join("?" for _ in clean_ids)
     conn = get_db()
     rows = conn.cursor().execute(f"""
         SELECT
             a.student_id, a.full_name, a.section,
-            a.morning_out, a.morning_duration_min,
-            a.afternoon_out, a.afternoon_duration_min,
+            a.morning_in, a.morning_out, a.morning_duration_min, a.morning_voided,
+            a.afternoon_in, a.afternoon_out, a.afternoon_duration_min,
             a.attendance_eligible, a.eval_status, a.is_eligible, a.cert_status,
             e.active_session_id, e.lock_expires_at, e.draft_json
         FROM attendees a
@@ -1428,12 +1676,22 @@ def get_passes_live_status(student_ids: List[str]) -> Dict[str, Dict[str, Any]]:
             "student_id": row["student_id"],
             "student_name": row["full_name"],
             "section": row["section"],
+            "morning_in_fmt": format_time_str(row["morning_in"]),
+            "morning_out_fmt": format_time_str(row["morning_out"]),
+            "afternoon_in_fmt": format_time_str(row["afternoon_in"]),
+            "afternoon_out_fmt": format_time_str(row["afternoon_out"]),
+            "morning_voided": bool(row["morning_voided"]),
+            "has_morning_in": bool(row["morning_in"]),
+            "has_morning_out": bool(row["morning_out"]),
+            "has_afternoon_in": bool(row["afternoon_in"]),
+            "has_afternoon_out": bool(row["afternoon_out"]),
             "has_timeout": has_timeout,
             "duration_min": total_dur,
             "min_duration": int(min_dur),
             "attendance_eligible": bool(row["attendance_eligible"]),
             "eval_status": row["eval_status"] or "PENDING",
             "eval_answered_count": answered_count,
+            "eval_total_questions": total_questions,
             "eval_locked": is_locked,
             "eval_lock_holder": lock_holder,
             "is_eligible": bool(row["is_eligible"]),
@@ -1457,7 +1715,7 @@ def get_all_evaluations_for_export() -> List[Dict[str, Any]]:
             e.q1_6, e.q1_7, e.q1_8, e.q1_9, e.q1_10, e.q1_avg,
             e.q2_1, e.q2_2, e.q2_3,
             e.q3_1, e.q3_2, e.q3_3,
-            e.is_auto_tallied, e.updated_at, e.submitted_at
+            e.draft_json, e.is_auto_tallied, e.updated_at, e.submitted_at
         FROM evaluations e
         INNER JOIN attendees a ON UPPER(a.student_id) = UPPER(e.student_id)
         ORDER BY COALESCE(e.submitted_at, e.updated_at) DESC
@@ -1501,7 +1759,10 @@ def get_statistics() -> Dict[str, Any]:
     eval_agg = cursor.execute("""
         SELECT
             COUNT(CASE WHEN status = 'SUBMITTED' THEN 1 END) as submitted_cnt,
-            COUNT(CASE WHEN status = 'IN_PROGRESS' AND draft_json != '{}' THEN 1 END) as draft_cnt,
+            COUNT(CASE WHEN status = 'IN_PROGRESS' AND (
+                (json_valid(draft_json) AND json_extract(draft_json, '$.answered_count') > 0)
+                OR (json_valid(draft_json) AND json_extract(draft_json, '$.answered_count') IS NULL AND draft_json != '{}')
+            ) THEN 1 END) as draft_cnt,
             ROUND(AVG(CASE WHEN status = 'SUBMITTED' AND q1_avg > 0 THEN q1_avg END), 2) as overall_avg,
             ROUND(AVG(CASE WHEN status = 'SUBMITTED' THEN q1_1 END), 2) as avg_1,
             ROUND(AVG(CASE WHEN status = 'SUBMITTED' THEN q1_2 END), 2) as avg_2,
@@ -1603,15 +1864,26 @@ def get_all_attendees(search: Optional[str] = None, filter_level: Optional[str] 
         d["afternoon_out_fmt"] = format_time_str(d.get("afternoon_out"))
         d["eval_status"] = d.get("eval_status") or "PENDING"
         
-        # Primary session time display
-        if d.get("morning_in"):
+        # Primary session time display (show total duration across completed sessions & voided state)
+        has_m_in = bool(d.get("morning_in"))
+        has_a_in = bool(d.get("afternoon_in"))
+        total_dur = round((d.get("morning_duration_min") or 0) + (d.get("afternoon_duration_min") or 0))
+        if has_m_in and has_a_in:
+            d["primary_in_fmt"] = f"{d['morning_in_fmt']} / {d['afternoon_in_fmt']}"
+            d["primary_out_fmt"] = f"{d['morning_out_fmt'] or '-'} / {d['afternoon_out_fmt'] or '-'}"
+            d["primary_duration_min"] = total_dur
+        elif has_m_in:
             d["primary_in_fmt"] = d["morning_in_fmt"]
             d["primary_out_fmt"] = d["morning_out_fmt"] or "-"
-            d["primary_duration_min"] = round(d.get("morning_duration_min") or 0)
-        elif d.get("afternoon_in"):
+            d["primary_duration_min"] = total_dur
+        elif has_a_in:
             d["primary_in_fmt"] = d["afternoon_in_fmt"]
             d["primary_out_fmt"] = d["afternoon_out_fmt"] or "-"
-            d["primary_duration_min"] = round(d.get("afternoon_duration_min") or 0)
+            d["primary_duration_min"] = total_dur
+        elif d.get("morning_voided"):
+            d["primary_in_fmt"] = "Voided (No Out)"
+            d["primary_out_fmt"] = "-"
+            d["primary_duration_min"] = 0
         else:
             d["primary_in_fmt"] = "-"
             d["primary_out_fmt"] = "-"
@@ -1631,30 +1903,60 @@ def admin_manual_add_attendee(data: Dict[str, Any]) -> Dict[str, Any]:
     cursor = conn.cursor()
     raw_sid = (data.get("student_id") or "").strip().upper()
     student_id = raw_sid if raw_sid else generate_fallback_student_id(cursor)
-    last_name = data["last_name"].strip()
-    first_name = data["first_name"].strip()
-    middle_name = (data.get("middle_name") or "N/A").strip()
+    last_name = " ".join(data["last_name"].strip().split())
+    first_name = " ".join(data["first_name"].strip().split())
+    raw_middle = (data.get("middle_name") or "").strip()
+    middle_name = "N/A" if (not raw_middle or raw_middle.upper() in ("N/A", "NA", "NONE", "-")) else raw_middle
     full_name = compute_full_name(last_name, first_name, middle_name)
     sex = data["sex"].strip()
     age = max(10, min(120, int(data["age"])))
     email = data["email"].strip().lower()
     level = normalize_level(data["level"])
-    section = data["section"].strip()
+    section = " ".join(data["section"].strip().split())
     shs_grade, strand, college_year, course = infer_academic_details(
         level, section,
         data.get("shs_grade"), data.get("strand"),
         data.get("college_year"), data.get("course")
     )
-    phase = data.get("phase", "MORNING_IN")
-    time_stamp = data.get("time_in") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    phase = data.get("phase") or "MORNING_IN"
+    if phase not in ("MORNING_IN", "AFTERNOON_IN"):
+        phase = "MORNING_IN"
+    time_stamp = (data.get("time_in") or "").strip() or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    session_label = "Afternoon" if phase == "AFTERNOON_IN" else "Morning"
 
     existing = cursor.execute("SELECT * FROM attendees WHERE UPPER(student_id) = ?", (student_id,)).fetchone()
     if existing:
-        conn.close()
-        return {"status": "error", "message": f"Student ID '{student_id}' already exists in records."}
+        ex_ln = " ".join((existing["last_name"] or "").strip().split()).upper()
+        ex_fn = " ".join((existing["first_name"] or "").strip().split()).upper()
+        if ex_ln != last_name.upper() or ex_fn != first_name.upper():
+            conn.close()
+            return {"status": "error", "message": f"Student ID '{student_id}' already belongs to {existing['full_name']}."}
 
-    morning_in = time_stamp if "MORNING" in phase else None
-    afternoon_in = time_stamp if "AFTERNOON" in phase else None
+        slot_col = "afternoon_in" if phase == "AFTERNOON_IN" else "morning_in"
+        if existing[slot_col]:
+            conn.close()
+            return {"status": "error", "message": f"Student ID '{student_id}' already has a {session_label} Time In recorded ({format_time_str(existing[slot_col])})."}
+
+        if phase == "AFTERNOON_IN":
+            cursor.execute("UPDATE attendees SET afternoon_in = ? WHERE UPPER(student_id) = ?", (time_stamp, student_id))
+        else:
+            cursor.execute("UPDATE attendees SET morning_in = ?, morning_voided = 0 WHERE UPPER(student_id) = ?", (time_stamp, student_id))
+        conn.commit()
+        conn.close()
+        return {
+            "status": "success",
+            "message": f"Recorded {session_label} Time In for {existing['full_name']}.",
+            "student_id": existing["student_id"],
+            "student_name": existing["full_name"],
+            "section": existing["section"],
+            "time": time_stamp,
+            "time_fmt": format_time_str(time_stamp),
+            "phase": phase,
+            "session_label": session_label,
+        }
+
+    morning_in = time_stamp if phase == "MORNING_IN" else None
+    afternoon_in = time_stamp if phase == "AFTERNOON_IN" else None
 
     cursor.execute("""
         INSERT INTO attendees (
@@ -1666,11 +1968,21 @@ def admin_manual_add_attendee(data: Dict[str, Any]) -> Dict[str, Any]:
         student_id, last_name, first_name, middle_name, full_name,
         sex, age, email, level, shs_grade, strand,
         college_year, course, section,
-        "MANUAL_ENTRY", "Admin Dashboard", morning_in, afternoon_in
+        "MANUAL_ENTRY", "Admin/Officer Manual Entry", morning_in, afternoon_in
     ))
     conn.commit()
     conn.close()
-    return {"status": "success", "message": f"Successfully registered attendee {full_name} manually.", "student_id": student_id, "student_name": full_name, "time": time_stamp}
+    return {
+        "status": "success",
+        "message": f"Successfully registered {full_name} ({session_label} Time In).",
+        "student_id": student_id,
+        "student_name": full_name,
+        "section": section,
+        "time": time_stamp,
+        "time_fmt": format_time_str(time_stamp),
+        "phase": phase,
+        "session_label": session_label,
+    }
 
 def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
     conn = get_db()
@@ -1685,8 +1997,9 @@ def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]
     first_name = data.get("first_name", row["first_name"]).strip()
     middle_name = (data.get("middle_name") or row["middle_name"] or "N/A").strip()
     full_name = compute_full_name(last_name, first_name, middle_name)
-    sex = data.get("sex", row["sex"]).strip()
-    age = max(10, min(120, int(data.get("age", row["age"]))))
+    sex = (data.get("sex") or row["sex"] or "Unspecified").strip()
+    raw_edit_age = data.get("age", row["age"])
+    age = 0 if raw_edit_age in (None, "", 0) else max(10, min(120, int(raw_edit_age)))
     email = data.get("email", row["email"]).strip().lower()
     level = normalize_level(data.get("level", row["level"]))
     section = data.get("section", row["section"]).strip()
@@ -1758,6 +2071,7 @@ def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]
             sex = ?, age = ?, email = ?, level = ?,
             shs_grade = ?, strand = ?, college_year = ?, course = ?, section = ?,
             morning_in = ?, morning_out = ?, morning_duration_min = ?,
+            morning_voided = CASE WHEN ? IS NOT NULL AND ? != '' THEN 0 ELSE morning_voided END,
             afternoon_in = ?, afternoon_out = ?, afternoon_duration_min = ?,
             attendance_eligible = ?, eval_status = ?, is_eligible = ?, cert_status = ?,
             cert_file_path = ?, cert_email_status = ?, cert_email_error = ?
@@ -1767,10 +2081,29 @@ def admin_edit_attendee(student_id: str, data: Dict[str, Any]) -> Dict[str, Any]
         sex, age, email, level,
         shs_grade, strand, college_year, course, section,
         morning_in, morning_out, m_dur,
+        morning_in, morning_in,
         afternoon_in, afternoon_out, a_dur,
         att_eligible, eval_status, is_eligible, cert_status,
         new_cert_file_path, new_cert_email_status, new_cert_email_error, sid
     ))
+    if eval_status in ("PENDING", "IN_PROGRESS"):
+        cursor.execute("""
+            UPDATE evaluations SET
+                status = 'IN_PROGRESS',
+                is_auto_tallied = 0,
+                active_session_id = NULL,
+                lock_expires_at = NULL,
+                submitted_at = NULL
+            WHERE UPPER(student_id) = ?
+        """, (sid,))
+    elif eval_status == "SUBMITTED":
+        cursor.execute("""
+            UPDATE evaluations SET
+                status = 'SUBMITTED',
+                active_session_id = NULL,
+                lock_expires_at = NULL
+            WHERE UPPER(student_id) = ?
+        """, (sid,))
     conn.commit()
     conn.close()
     return {

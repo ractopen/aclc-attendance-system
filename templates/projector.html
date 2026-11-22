@@ -18,12 +18,65 @@
     display: inline-block;
   }
   .qr-card-box {
-    background: rgba(10, 37, 86, 0.92);
-    border: 2px solid rgba(234, 163, 21, 0.5);
+    background: rgba(10, 37, 86, 0.94);
+    border: 2px solid rgba(234, 163, 21, 0.65);
     border-radius: 16px;
     padding: 24px 28px;
-    min-width: 300px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    min-width: 320px;
+    max-width: 440px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  }
+  .proj-subtext {
+    color: #E2E8F0 !important;
+  }
+  .proj-ip-pill {
+    display: inline-block;
+    background: #020617;
+    color: #FFFFFF;
+    border: 2px solid var(--aclc-gold);
+    border-radius: 999px;
+    padding: 8px 22px;
+    font-size: clamp(1.4rem, 2.5vw, 1.95rem);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    word-break: break-all;
+  }
+  .proj-ap-pill {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(2, 6, 23, 0.65);
+    border: 1px solid rgba(226, 232, 240, 0.25);
+    color: #E2E8F0;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  }
+  .proj-ap-pill:hover {
+    background: rgba(15, 23, 42, 0.85);
+    border-color: rgba(234, 163, 21, 0.75);
+  }
+  .proj-ap-pill:active {
+    transform: scale(0.99);
+  }
+  .proj-ap-pill.is-active {
+    border: 2px solid #22C55E;
+    background: rgba(34, 197, 94, 0.24);
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
+    color: #FFFFFF;
+    font-weight: 700;
+  }
+  .proj-subpill-slot {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .announcement-box-proj {
     background: rgba(10, 57, 129, 0.85);
@@ -59,7 +112,7 @@
           Attendance is currently closed
         {% endif %}
       </div>
-      <div class="text-white-50 fs-4 mt-1">
+      <div class="proj-subtext fs-4 mt-1">
         Certificate Eligibility: <strong class="text-white" id="projMinDurLabel">{{ min_duration_label }}</strong> Attendance + <strong class="text-warning">Seminar Evaluation Form</strong>
       </div>
     </div>
@@ -74,53 +127,91 @@
     </div>
 
     <!-- QR Code Display (Side-by-Side or Centered) -->
-    <div class="row justify-content-center align-items-center g-4 my-2" id="qrDisplayRow">
+    <div class="row justify-content-center align-items-stretch g-4 my-2" id="qrDisplayRow">
       
-      <!-- Wi-Fi Auto-Connect QR Card -->
-      <div class="col-auto text-center {% if not proj_show_wifi_qr %}d-none{% endif %}" id="colWifiQr">
-        <div class="qr-card-box">
-          <span class="badge bg-gold text-dark fs-3 px-3 py-1 fw-bold mb-2 d-inline-block">
-            GUEST WI-FI
-          </span>
-          <div class="qr-frame mx-auto mb-2 d-block">
-            <img id="wifiQrImage" src="/api/qr/wifi" alt="Wi-Fi QR Code" width="250" height="250" class="img-fluid rounded">
+      <!-- Step 1: Wi-Fi Auto-Connect QR Card -->
+      <div class="col-auto text-center d-flex {% if not proj_show_wifi_qr %}d-none{% endif %}" id="colWifiQr">
+        <div class="qr-card-box d-flex flex-column w-100">
+          <div class="flex-grow-1 d-flex flex-column justify-content-start">
+            <div>
+              <span class="badge bg-warning text-dark fs-3 px-3 py-1 fw-bold mb-2 d-inline-block border border-dark">
+                STEP 1: CONNECT TO WI-FI
+              </span>
+            </div>
+            <div class="mb-2 proj-subpill-slot {% if wifi_ssids|length <= 1 %}d-none{% endif %}" id="wifiApRotationRow">
+              <span class="badge bg-success text-white px-2 py-1 fw-bold" id="wifiApRotationBadge">
+                AP 1 of {{ wifi_ssids|length }} &middot; Front Rows
+              </span>
+            </div>
+            <div class="qr-frame mx-auto mb-2 d-block">
+              <img id="wifiQrImage" src="/api/qr/wifi?ap=1" alt="Wi-Fi QR Code" width="240" height="240" class="img-fluid rounded">
+            </div>
+            <div class="text-white fw-bold fs-2" id="wifiSsidLabel">
+              {{ wifi_ssids[0] }}
+            </div>
+            <div class="proj-subtext fs-5 fw-bold mb-2" id="wifiPassLabel">
+              {% if wifi_password %}Password: <span class="font-monospace text-warning fw-bold">{{ wifi_password }}</span>{% else %}Open Network (No Password){% endif %}
+            </div>
+            <div id="wifiMultiApList" class="d-flex flex-column gap-2 my-2 {% if wifi_ssids|length <= 1 %}d-none{% endif %}">
+              {% set row_labels = ['Front Rows', 'Middle Rows', 'Back Rows'] %}
+              {% for ap_ssid in wifi_ssids %}
+              <button type="button" class="proj-ap-pill {% if loop.first %}is-active{% endif %}" data-ap-index="{{ loop.index0 }}">
+                <span>
+                  {{ row_labels[loop.index0] if loop.index0 < 3 else 'Zone ' ~ loop.index }}
+                  {% if loop.first %}<span class="badge bg-success text-white ms-1">ACTIVE QR</span>{% endif %}
+                </span>
+                <span class="font-monospace fw-bold text-white">{{ ap_ssid }}</span>
+              </button>
+              {% endfor %}
+            </div>
           </div>
-          <div class="text-white fw-bold fs-3" id="wifiSsidLabel">
-            {{ wifi_ssid or 'HIV Awareness Attendance' }}
-          </div>
-          <div class="text-white-50 small" id="wifiPassLabel">
-            {% if wifi_password %}Password: <span class="font-monospace text-warning fw-bold">{{ wifi_password }}</span>{% else %}Open Network (No Password){% endif %}
+          <div class="proj-subtext small fw-bold mt-auto pt-2 border-top border-light border-opacity-25">
+            No scanner? Open Wi-Fi settings and connect manually.
           </div>
         </div>
       </div>
 
-      <!-- Student Page QR Card -->
-      <div class="col-auto text-center {% if not proj_show_form_qr %}d-none{% endif %}" id="colFormQr">
-        <div class="qr-card-box">
-          <span class="badge bg-hiv-crimson text-white fs-3 px-3 py-1 fw-bold mb-2 d-inline-block border border-light">
-            ATTENDANCE &amp; EVALUATION
-          </span>
-          <div class="qr-frame mx-auto mb-2 d-block">
-            <img id="formQrImage" src="/api/qr" alt="Student Page QR Code" width="250" height="250" class="img-fluid rounded">
+      <!-- Step 2: Student Page QR Card -->
+      <div class="col-auto text-center d-flex {% if not proj_show_form_qr %}d-none{% endif %}" id="colFormQr">
+        <div class="qr-card-box d-flex flex-column w-100">
+          <div class="flex-grow-1 d-flex flex-column justify-content-start">
+            <div>
+              <span class="badge bg-hiv-crimson text-white fs-3 px-3 py-1 fw-bold mb-2 d-inline-block border border-light">
+                STEP 2: ATTENDANCE &amp; QUIZ
+              </span>
+            </div>
+            <div class="mb-2 proj-subpill-slot {% if wifi_ssids|length <= 1 %}d-none{% endif %}" id="formPortalSubRow">
+              <span class="badge bg-azure text-white px-2 py-1 fw-bold">
+                AFTER WI-FI CONNECTION &middot; LOCAL PORTAL
+              </span>
+            </div>
+            <div class="qr-frame mx-auto mb-2 d-block">
+              <img id="formQrImage" src="/api/qr" alt="Student Page QR Code" width="240" height="240" class="img-fluid rounded">
+            </div>
+            <div class="text-white fw-bold fs-3 mb-2">
+              Scan or Type Address Below
+            </div>
+            <div class="my-auto py-2">
+              <div class="proj-ip-pill font-monospace" id="formUrlLabel">
+                {{ display_url }}
+              </div>
+            </div>
           </div>
-          <div class="text-white fw-bold fs-3">
-            Scan to Open Pass &amp; Quiz
-          </div>
-          <div class="text-white-50 font-monospace small text-truncate" style="max-width: 280px;" id="formUrlLabel">
-            {{ kiosk_url or base_url }}
+          <div class="proj-subtext small fw-bold mt-auto pt-2 border-top border-light border-opacity-25">
+            No QR scanner? Open Chrome or Safari and type this address (no https:// needed).
           </div>
         </div>
       </div>
 
       <!-- Notice when both are hidden -->
-      <div class="col-12 text-center text-white-50 py-4 {% if proj_show_form_qr or proj_show_wifi_qr %}d-none{% endif %}" id="bothHiddenNotice">
+      <div class="col-12 text-center proj-subtext py-4 {% if proj_show_form_qr or proj_show_wifi_qr %}d-none{% endif %}" id="bothHiddenNotice">
         <em>QR codes are currently hidden by the organizer.</em>
       </div>
 
     </div>
 
     <!-- Attribution Footer -->
-    <div class="text-white-50 small mt-4 fw-bold">
+    <div class="proj-subtext small mt-4 fw-bold">
       Prepared by: CS31A
     </div>
 
@@ -138,8 +229,83 @@ document.addEventListener("DOMContentLoaded", function() {
   setInterval(updateClock, 1000);
   updateClock();
 
-  let lastWifiSig = "{{ (wifi_ssid or 'HIV Awareness Attendance') ~ '|' ~ (wifi_password or '') }}";
+  let wifiSsids = {{ wifi_ssids | tojson }};
+  let activeApIdx = 0;
+  let lastWifiSig = wifiSsids.join(",") + "|{{ wifi_password or '' }}";
   let lastFormUrl = "{{ kiosk_url or base_url }}";
+  const rowLabels = ["Front Rows", "Middle Rows", "Back Rows"];
+
+  function stripHttpScheme(raw) {
+    return String(raw || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "").replace(/:80$/, "");
+  }
+
+  function renderActiveApUI() {
+    const wifiSsidLabel = document.getElementById("wifiSsidLabel");
+    const wifiQrImage = document.getElementById("wifiQrImage");
+    const rotRow = document.getElementById("wifiApRotationRow");
+    const formSubRow = document.getElementById("formPortalSubRow");
+    const rotBadge = document.getElementById("wifiApRotationBadge");
+    const listWrap = document.getElementById("wifiMultiApList");
+
+    if (!wifiSsids || wifiSsids.length === 0) wifiSsids = ["HIV Awareness Attendance"];
+    if (activeApIdx >= wifiSsids.length) activeApIdx = 0;
+
+    const currentSsid = wifiSsids[activeApIdx];
+    const apNum = activeApIdx + 1;
+    if (wifiSsidLabel) wifiSsidLabel.textContent = currentSsid;
+    if (wifiQrImage) wifiQrImage.src = `/api/qr/wifi?ap=${apNum}&t=${Date.now()}`;
+
+    if (wifiSsids.length > 1) {
+      if (rotRow) rotRow.classList.remove("d-none");
+      if (formSubRow) formSubRow.classList.remove("d-none");
+      if (rotBadge) rotBadge.textContent = `AP ${apNum} of ${wifiSsids.length} \u00B7 ${rowLabels[activeApIdx] || ('Zone ' + apNum)}`;
+      if (listWrap) {
+        listWrap.classList.remove("d-none");
+        listWrap.innerHTML = "";
+        wifiSsids.forEach((ssid, i) => {
+          const pill = document.createElement("button");
+          pill.type = "button";
+          const isAct = (i === activeApIdx);
+          pill.className = "proj-ap-pill" + (isAct ? " is-active" : "");
+          pill.setAttribute("data-ap-index", String(i));
+          const left = document.createElement("span");
+          left.textContent = rowLabels[i] || `Zone ${i + 1}`;
+          if (isAct) {
+            const actBadge = document.createElement("span");
+            actBadge.className = "badge bg-success text-white ms-1";
+            actBadge.textContent = "ACTIVE QR";
+            left.appendChild(actBadge);
+          }
+          const right = document.createElement("span");
+          right.className = "font-monospace fw-bold text-white";
+          right.textContent = ssid;
+          pill.appendChild(left);
+          pill.appendChild(right);
+          pill.addEventListener("click", function() {
+            if (activeApIdx !== i) {
+              activeApIdx = i;
+              renderActiveApUI();
+            }
+          });
+          listWrap.appendChild(pill);
+        });
+      }
+    } else {
+      if (rotRow) rotRow.classList.add("d-none");
+      if (formSubRow) formSubRow.classList.add("d-none");
+      if (listWrap) listWrap.classList.add("d-none");
+    }
+  }
+
+  // Bind initial server-rendered AP pills so they are clickable immediately
+  document.querySelectorAll("#wifiMultiApList .proj-ap-pill").forEach((pill, i) => {
+    pill.addEventListener("click", function() {
+      if (activeApIdx !== i) {
+        activeApIdx = i;
+        renderActiveApUI();
+      }
+    });
+  });
 
   // Background real-time sync with admin settings
   setInterval(async function() {
@@ -156,10 +322,8 @@ document.addEventListener("DOMContentLoaded", function() {
       const annText = document.getElementById("projAnnouncementText");
       const colWifi = document.getElementById("colWifiQr");
       const colForm = document.getElementById("colFormQr");
-      const wifiSsidLabel = document.getElementById("wifiSsidLabel");
       const wifiPassLabel = document.getElementById("wifiPassLabel");
       const formUrlLabel = document.getElementById("formUrlLabel");
-      const wifiQrImage = document.getElementById("wifiQrImage");
       const formQrImage = document.getElementById("formQrImage");
       const bothHidden = document.getElementById("bothHiddenNotice");
 
@@ -210,7 +374,6 @@ document.addEventListener("DOMContentLoaded", function() {
         else bothHidden.classList.add("d-none");
       }
 
-      if (wifiSsidLabel && data.wifi_ssid) wifiSsidLabel.textContent = data.wifi_ssid;
       if (wifiPassLabel) {
         if (data.wifi_password) {
           wifiPassLabel.textContent = "Password: ";
@@ -222,14 +385,20 @@ document.addEventListener("DOMContentLoaded", function() {
           wifiPassLabel.textContent = "Open Network (No Password)";
         }
       }
-      const curWifiSig = `${data.wifi_ssid || 'HIV Awareness Attendance'}|${data.wifi_password || ''}`;
+
+      const incomingSsids = Array.isArray(data.wifi_ssids) && data.wifi_ssids.length > 0
+        ? data.wifi_ssids
+        : [data.wifi_ssid || "HIV Awareness Attendance"];
+      const curWifiSig = incomingSsids.join(",") + "|" + (data.wifi_password || "");
       if (curWifiSig !== lastWifiSig) {
         lastWifiSig = curWifiSig;
-        if (wifiQrImage) wifiQrImage.src = "/api/qr/wifi?t=" + Date.now();
+        wifiSsids = incomingSsids;
+        activeApIdx = 0;
+        renderActiveApUI();
       }
 
       const curFormUrl = data.kiosk_url || data.base_url;
-      if (formUrlLabel) formUrlLabel.textContent = curFormUrl;
+      if (formUrlLabel) formUrlLabel.textContent = data.display_url || stripHttpScheme(curFormUrl);
       if (curFormUrl !== lastFormUrl) {
         lastFormUrl = curFormUrl;
         if (formQrImage) formQrImage.src = "/api/qr?t=" + Date.now();

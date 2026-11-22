@@ -1,0 +1,28 @@
+{
+  "_comment": "Editable section seed file (cross-platform Linux/Windows). Loaded automatically on startup.",
+  "shs": {
+    "Grade 11": [
+      "BEM1", "BEM2", "BEP1",
+      "STM1", "STM2", "STM3", "STM4", "STP1",
+      "SHM1", "SHM2", "SHM3", "SHM4", "SHM5", "SHP1",
+      "FBM1", "FBM2", "FBM3", "FBP1",
+      "ICM1", "ICM2", "ICM3", "ICP1"
+    ],
+    "Grade 12": [
+      "AM21", "AM22", "AM23", "AP21",
+      "GM21",
+      "SM21", "SM22", "SM23", "SM24", "SP21",
+      "HA21", "HA22", "HA23", "HA24", "HA25", "HP21",
+      "IM21", "IM22", "IM23", "IP21",
+      "EM21",
+      "HM21", "HM22", "HM23", "HM24", "HM25",
+      "IA21"
+    ]
+  },
+  "college": [
+    "CS31A"
+  ],
+  "non_student": [
+    "Faculty", "Staff", "Guest", "Speaker", "Organizer"
+  ]
+}

@@ -218,7 +218,32 @@ def run_certificate_tests():
         assert r_csv.status_code == 200
         assert "OK - Sent without error" in r_csv.text
         assert "2024-TROLL-1" in r_csv.text
-        print("  [PASS] /quality troll detection, 2-min near-miss rescue, stash pool & delivery CSV")
+
+        # Duplicate-email warning across two eligible attendees
+        database.admin_manual_add_attendee({
+            "student_id": "2024-DUP-EM-1", "last_name": "Santos", "first_name": "Ana",
+            "middle_name": "N/A", "sex": "Female", "age": 19, "email": "shared.inbox@gmail.com",
+            "level": "COLLEGE", "section": "CS31A",
+        })
+        database.admin_edit_attendee("2024-DUP-EM-1", {
+            "morning_in": "2026-11-15 08:00:00", "morning_out": "2026-11-15 11:00:00",
+            "eval_status": "SUBMITTED", "is_eligible": 1,
+        })
+        database.admin_manual_add_attendee({
+            "student_id": "2024-DUP-EM-2", "last_name": "Santos", "first_name": "Ben",
+            "middle_name": "N/A", "sex": "Male", "age": 19, "email": "shared.inbox@gmail.com",
+            "level": "COLLEGE", "section": "CS31A",
+        })
+        database.admin_edit_attendee("2024-DUP-EM-2", {
+            "morning_in": "2026-11-15 08:00:00", "morning_out": "2026-11-15 11:00:00",
+            "eval_status": "SUBMITTED", "is_eligible": 1,
+        })
+        q_dup = client.get("/api/admin/quality/data").json()
+        dup_rows = [x for x in q_dup["eligible"] if x["student_id"] in ("2024-DUP-EM-1", "2024-DUP-EM-2")]
+        assert len(dup_rows) == 2
+        assert all(any(f["code"] == "duplicate_email" for f in r["quality"]["flags"]) for r in dup_rows)
+        assert all(r["quality"]["severity"] == "warning" for r in dup_rows)
+        print("  [PASS] /quality troll detection, duplicate-email warning, 2-min near-miss rescue, stash pool & delivery CSV")
 
         print("=" * 65)
         print("ALL CERTIFICATE STUDIO & EMAIL TESTS PASSED")

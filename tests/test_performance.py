@@ -185,19 +185,41 @@ def run_performance_and_unit_tests():
         assert r_init_live["eval_open"] is False, "Evaluation must default to Closed at server start"
         print("  [PASS] Server Start Defaults Verified (150 mins duration & Evaluation Closed)")
 
-        # Manually back-date Maria to 160 minutes ago (>= 150m) to test attendance + evaluation eligibility
-        # Also test whole-day cross-session fallback: Maria timed in during MORNING_IN, and checks out during AFTERNOON_OUT!
+        # Strict Morning vs Afternoon session separation + Void unclosed Morning In + Admin/Officer QR Time-In
+        # Maria (2024-COL-002) timed in during MORNING_IN and did NOT scan MORNING_OUT.
+        # 1. Attempting AFTERNOON_OUT without AFTERNOON_IN must be rejected (no cross-session fallback).
+        database.set_setting("current_phase", "AFTERNOON_OUT")
+        r_no_aft_in = client.post("/api/attendance/out", json={"student_id": "2024-COL-002"})
+        assert r_no_aft_in.status_code == 200 and r_no_aft_in.json()["status"] == "error"
+
+        # 2. Switching via /api/admin/set-phase to AFTERNOON_IN voids unclosed Morning In (Maria)
+        #    while preserving completed Morning attendance (2024-SHS-001).
+        r_phase_aft = client.post("/api/admin/set-phase", json={"phase": "AFTERNOON_IN"})
+        assert r_phase_aft.status_code == 200 and r_phase_aft.json()["voided_morning_count"] >= 1
         conn = database.get_db()
-        conn.execute("UPDATE attendees SET morning_in = datetime('now', '-160 minutes') WHERE student_id = '2024-COL-002'")
+        maria_row = conn.execute("SELECT morning_in, morning_voided FROM attendees WHERE student_id = '2024-COL-002'").fetchone()
+        shs_row = conn.execute("SELECT morning_in, morning_out, morning_voided FROM attendees WHERE student_id = '2024-SHS-001'").fetchone()
+        conn.close()
+        assert maria_row["morning_in"] is None and maria_row["morning_voided"] == 1
+        assert shs_row["morning_in"] is not None and shs_row["morning_out"] is not None and shs_row["morning_voided"] == 0
+
+        # 3. Officer/Admin scans Maria's QR pass on Scanner during AFTERNOON_IN to record Afternoon Time In
+        maria_tok = main.compute_pass_token("2024-COL-002")
+        r_scan_in = client.post("/api/admin/scanner-time-in", json={"student_id": f"ACLC:2024-COL-002:{maria_tok}"})
+        assert r_scan_in.status_code == 200 and r_scan_in.json()["status"] == "success"
+
+        # Back-date Maria's afternoon_in to 160 minutes ago (>= 150m) and scan AFTERNOON_OUT
+        conn = database.get_db()
+        conn.execute("UPDATE attendees SET afternoon_in = datetime('now', '-160 minutes') WHERE student_id = '2024-COL-002'")
         conn.commit()
         conn.close()
 
         database.set_setting("current_phase", "AFTERNOON_OUT")
         r = client.post("/api/attendance/out", json={"student_id": "2024-COL-002"})
         assert r.status_code == 200 and r.json()["status"] == "success"
-        assert r.json()["attendance_eligible"] == True, "160-min attendance should meet duration requirement"
+        assert r.json()["attendance_eligible"] == True, "160-min afternoon attendance should meet duration requirement"
         assert r.json()["is_eligible"] == False, "Certificate requires BOTH >=150m duration AND Evaluation submission"
-        print("  [PASS] Whole-Day Cross-Session Time Out (Morning-In -> Afternoon-Out) & Duration Met (>=150m)")
+        print("  [PASS] Strict Session Split, Unclosed Morning Voiding & Scanner QR Time-In Verified")
 
         # Test Seminar Evaluation Concurrency Lock, Auto-Save, Release, Submit & Admin Tally
         maria_tok = main.compute_pass_token("2024-COL-002")
@@ -307,6 +329,96 @@ def run_performance_and_unit_tests():
         assert r_tally.status_code == 200 and r_tally.json()["tallied_count"] == 1
         print("  [PASS] Admin End-of-Day Tally & Finalization of Unfinished Drafts Verified")
 
+        # 8b. Dynamic Quiz Schema Edge Cases: Disabled question, custom question, empty schema block, _ts & cleared draft count
+        r_empty_schema = client.post("/api/admin/evaluation/schema", json={
+            "part1": [{"id": "q1_1", "type": "rating", "text": "Disabled", "enabled": False}],
+            "part2": [],
+            "part3": []
+        })
+        assert r_empty_schema.status_code == 400, "Saving a schema with 0 active questions must be rejected"
+
+        custom_schema = {
+            "part1": [
+                {"id": "q1_1", "type": "rating", "text": "1. Active rating", "enabled": True},
+                {"id": "q1_2", "type": "rating", "text": "2. Disabled rating", "enabled": False}
+            ],
+            "part2": [
+                {"id": "c_custom_text", "type": "text", "text": "Custom open feedback", "enabled": True}
+            ],
+            "part3": []
+        }
+        r_set_schema = client.post("/api/admin/evaluation/schema", json=custom_schema)
+        assert r_set_schema.status_code == 200
+
+        # Check-in guest attendee (temporarily set AFTERNOON_IN) to test dynamic schema & cleared draft
+        database.set_setting("current_phase", "AFTERNOON_IN")
+        r_dyn_in = client.post("/api/attendance/in", json={
+            "student_id": "2024-DYN-001", "last_name": "Edge", "first_name": "Tester",
+            "middle_name": "N/A", "sex": "Male", "age": 20, "email": "edge@aclc.edu.ph",
+            "level": "COLLEGE", "section": "CS31A"
+        })
+        assert r_dyn_in.status_code == 200 and r_dyn_in.json()["status"] == "success", f"Unexpected: {r_dyn_in.text}"
+        dyn_tok = r_dyn_in.json()["token"]
+        database.set_setting("current_phase", "AFTERNOON_OUT")
+
+        # Verify lowercase aclc: QR payload is accepted by /api/attendance/out
+        r_qr_lower = client.post("/api/attendance/out", json={"student_id": f"aclc:2024-dyn-001:{dyn_tok.lower()}"})
+        assert r_qr_lower.status_code == 200 and r_qr_lower.json()["status"] == "success", f"Lowercase QR failed: {r_qr_lower.text}"
+
+        r_dyn_open = client.post("/api/evaluation/open", json={
+            "student_id": "2024-DYN-001", "session_id": "SESS-DYN", "token": dyn_tok
+        })
+        assert r_dyn_open.status_code == 200
+
+        # Cleared draft (0 answered) must NOT inflate eval_in_progress, and _ts must persist
+        client.post("/api/evaluation/autosave", json={
+            "student_id": "2024-DYN-001", "session_id": "SESS-DYN", "token": dyn_tok,
+            "draft": {"_ts": 1700000000123, "q1_1": None}
+        })
+        r_stats_zero = client.get("/api/stats").json()
+        assert r_stats_zero["eval_in_progress"] == 0, f"Cleared draft must not count as tallyable draft: {r_stats_zero}"
+        r_dyn_reopen = client.post("/api/evaluation/open", json={
+            "student_id": "2024-DYN-001", "session_id": "SESS-DYN", "token": dyn_tok
+        })
+        assert r_dyn_reopen.json()["draft"].get("_ts") == 1700000000123
+
+        # Missing custom question must fail; answering active questions (without disabled q1_2) must succeed,
+        # and custom text "5" must not skew q1_avg (should stay 4.0, not 4.5!)
+        r_dyn_missing = client.post("/api/evaluation/submit", json={
+            "student_id": "2024-DYN-001", "session_id": "SESS-DYN", "token": dyn_tok,
+            "answers": {"q1_1": 4}
+        })
+        assert r_dyn_missing.json()["status"] == "error"
+        r_dyn_ok = client.post("/api/evaluation/submit", json={
+            "student_id": "2024-DYN-001", "session_id": "SESS-DYN", "token": dyn_tok,
+            "answers": {"q1_1": 4, "c_custom_text": "5"}
+        })
+        assert r_dyn_ok.status_code == 200 and r_dyn_ok.json()["status"] == "success"
+        assert r_dyn_ok.json()["q1_avg"] == 4.0, f"Text '5' should not skew rating avg: {r_dyn_ok.json()}"
+
+        # Admin Eval detail & CSV export must include custom schema question
+        r_dyn_detail = client.get("/api/admin/evaluation-detail?student_id=2024-DYN-001")
+        assert r_dyn_detail.status_code == 200 and r_dyn_detail.json()["draft"].get("c_custom_text") == "5"
+        r_dyn_csv = client.get("/api/export/evaluation-csv")
+        assert r_dyn_csv.status_code == 200 and "Custom: Custom open feedback" in r_dyn_csv.text
+
+        # Admin resetting eval_status back to IN_PROGRESS must unlock evaluations.status for reopening
+        r_reset_eval = client.post("/api/admin/edit-attendee", json={
+            "student_id": "2024-DYN-001", "last_name": "Edge", "first_name": "Tester",
+            "middle_name": "N/A", "sex": "Male", "age": 20, "email": "edge@aclc.edu.ph",
+            "level": "COLLEGE", "section": "CS31A", "eval_status": "IN_PROGRESS", "is_eligible": 0
+        })
+        assert r_reset_eval.status_code == 200
+        r_reopen_unlocked = client.post("/api/evaluation/open", json={
+            "student_id": "2024-DYN-001", "session_id": "SESS-DYN-2", "token": dyn_tok
+        })
+        assert r_reopen_unlocked.status_code == 200 and r_reopen_unlocked.json()["status"] == "success"
+
+        # Reset quiz schema back to default and clean up temporary attendee
+        assert client.post("/api/admin/evaluation/schema/reset").status_code == 200
+        assert client.post("/api/admin/delete-attendee", json={"student_id": "2024-DYN-001"}).status_code == 200
+        print("  [PASS] Dynamic Quiz Schema Validation, Custom Export, Admin Eval Reset & Edge Cases Verified")
+
         # 9. Verify Student View HTML Responsive Refactor & Try-Evaluation Preview Link
         r_stud_html = client.get("/")
         assert r_stud_html.status_code == 200
@@ -379,34 +491,68 @@ def run_performance_and_unit_tests():
         assert live_data["kiosk_announcement"] == "Welcome back to the afternoon session!"
         print("  [PASS] Live Config & Session/Status Sync")
 
-        # Test Projector Config API
+        # Test Projector Config API (3 Access Points + https:// normalization to plain http:// + bare IP display)
         r_proj = client.post(
             "/api/admin/set-projector-config",
             json={
                 "proj_show_form_qr": True,
                 "proj_show_wifi_qr": False,
                 "wifi_ssid": "ACLC_Auditorium_WiFi",
+                "wifi_ssid_2": "ACLC_Auditorium_WiFi_2",
+                "wifi_ssid_3": "ACLC_Auditorium_WiFi_3",
                 "wifi_password": "securepassword",
-                "kiosk_url": "http://192.168.1.150:8080",
+                "kiosk_url": "https://192.168.1.150:8080/",
                 "proj_announcement": "Welcome to the Seminar! Please scan QR."
             },
             cookies={"aclc_admin_session": cookie}
         )
         assert r_proj.status_code == 200
 
-        # Verify live sync on /api/kiosk-live
+        # Verify saving kiosk config with empty current_phase does not revert active phase
+        r_kiosk_nophase = client.post(
+            "/api/admin/set-kiosk-config",
+            json={
+                "event_title": "ACLC Gender Seminar 2026",
+                "active_session_label": "Afternoon Time In",
+                "current_phase": "",
+                "event_date": "",
+                "venue": "ACLC College of Mandaue",
+                "kiosk_announcement": "Welcome back to the afternoon session!",
+                "terms_and_conditions": ""
+            },
+            cookies={"aclc_admin_session": cookie}
+        )
+        assert r_kiosk_nophase.status_code == 200
+
+        # Verify live sync on /api/kiosk-live & /projector HTML & /api/qr/wifi?ap=2
         r_proj_live = client.get("/api/kiosk-live")
         assert r_proj_live.status_code == 200
         p_data = r_proj_live.json()
+        assert p_data["phase"] == "AFTERNOON_IN"
         assert p_data["proj_show_form_qr"] is True
         assert p_data["proj_show_wifi_qr"] is False
         assert p_data["wifi_ssid"] == "ACLC_Auditorium_WiFi"
+        assert p_data["wifi_ssids"] == ["ACLC_Auditorium_WiFi", "ACLC_Auditorium_WiFi_2", "ACLC_Auditorium_WiFi_3"]
         assert p_data["wifi_password"] == "securepassword"
         assert p_data["kiosk_url"] == "http://192.168.1.150:8080"
+        assert p_data["display_url"] == "192.168.1.150:8080"
         assert p_data["proj_announcement"] == "Welcome to the Seminar! Please scan QR."
-        print("  [PASS] Projector Dual QR & Wi-Fi Settings API")
 
-        # Test Pass Lookup Endpoint (Requires ID/Email + Last Name verification)
+        r_proj_html = client.get("/projector")
+        assert r_proj_html.status_code == 200
+        assert "STEP 1: CONNECT TO WI-FI" in r_proj_html.text
+        assert "STEP 2: ATTENDANCE &amp; QUIZ" in r_proj_html.text
+        assert "192.168.1.150:8080" in r_proj_html.text
+        assert "ACLC_Auditorium_WiFi_2" in r_proj_html.text
+        assert "ACLC_Auditorium_WiFi_3" in r_proj_html.text
+        assert client.get("/api/qr/wifi?ap=2").status_code == 200
+        r_cap = client.get("/captive", headers={"host": "connectivitycheck.gstatic.com"})
+        assert r_cap.status_code == 200
+        assert "http://192.168.1.150:8080/" in r_cap.text
+        assert "connectivitycheck.gstatic.com" not in r_cap.text
+        print("  [PASS] Projector Multi-AP, Bare-IP Plain HTTP, Captive Host & Settings API Verified")
+
+        # Test Pass Lookup Endpoint (Name + Age, Duplicate Disambiguation & Legacy ID + Last Name)
         r_lookup_unverified = client.get("/api/attendance/pass-lookup?student_id=2024-SHS-001")
         assert r_lookup_unverified.status_code == 200 and r_lookup_unverified.json()["status"] == "error"
         r_lookup = client.get("/api/attendance/pass-lookup?student_id=2024-SHS-001&last_name=Dela+Cruz")
@@ -415,9 +561,40 @@ def run_performance_and_unit_tests():
         assert lookup_data["status"] == "success"
         assert lookup_data["student_id"] == "2024-SHS-001"
         assert lookup_data["qr_data"].startswith("ACLC:2024-SHS-001:")
-        print("  [PASS] Student Friend Pass Lookup API Verified")
 
-        # Test Admin Manual Add Attendee with custom time-in
+        # Name + Age recovery (without knowing ID or Email)
+        r_lookup_name_age = client.get("/api/attendance/pass-lookup?q=Juan+Dela+Cruz&age=17")
+        assert r_lookup_name_age.status_code == 200 and r_lookup_name_age.json()["status"] == "success"
+        assert r_lookup_name_age.json()["student_id"] == "2024-SHS-001"
+
+        # Duplicate Name + Age -> returns status='multiple' with selectable matches, and blank-ID manual add works
+        r_dup_add = client.post(
+            "/api/admin/manual-add",
+            json={
+                "student_id": "",
+                "last_name": "Dela Cruz",
+                "first_name": "Juan",
+                "middle_name": "",
+                "sex": "Male",
+                "age": 17,
+                "email": "shared@gmail.com",
+                "level": "SHS",
+                "section": "11-ABM-B",
+                "phase": "MORNING_IN"
+            },
+            cookies={"aclc_admin_session": cookie}
+        )
+        assert r_dup_add.status_code == 200 and r_dup_add.json()["status"] == "success"
+        dup_noid = r_dup_add.json()["student_id"]
+        assert dup_noid.startswith("NOID-")
+
+        r_lookup_multi = client.get("/api/attendance/pass-lookup?q=Juan+Dela+Cruz&age=17")
+        assert r_lookup_multi.status_code == 200 and r_lookup_multi.json()["status"] == "multiple"
+        assert len(r_lookup_multi.json()["matches"]) == 2
+        assert client.post("/api/admin/delete-attendee", json={"student_id": dup_noid}, cookies={"aclc_admin_session": cookie}).status_code == 200
+        print("  [PASS] Student Pass Lookup (Name+Age & Duplicate Disambiguation) + Blank-ID Manual Add Verified")
+
+        # Test Admin Manual Add Attendee with custom time-in + recording missing Afternoon Time-In on existing attendee
         r_man_add = client.post(
             "/api/admin/manual-add",
             json={
@@ -436,7 +613,25 @@ def run_performance_and_unit_tests():
             cookies={"aclc_admin_session": cookie}
         )
         assert r_man_add.status_code == 200 and r_man_add.json()["status"] == "success"
-        print("  [PASS] Admin Manual Add Attendee with Custom Timestamp Verified")
+        r_man_aft = client.post(
+            "/api/admin/manual-add",
+            json={
+                "student_id": "2024-MAN-999",
+                "last_name": "Reyes",
+                "first_name": "Maria",
+                "middle_name": "Santos",
+                "sex": "Female",
+                "age": 18,
+                "email": "maria.reyes@gmail.com",
+                "level": "Senior High (SHS)",
+                "section": "12-STEM-A",
+                "phase": "AFTERNOON_IN",
+                "time_in": "2026-11-12 13:05:00"
+            },
+            cookies={"aclc_admin_session": cookie}
+        )
+        assert r_man_aft.status_code == 200 and r_man_aft.json()["status"] == "success"
+        print("  [PASS] Admin/Officer Manual Add Attendee & Session Time-In Verified")
 
         # Test Admin Edit Attendee (modify records and mark eligible)
         r_edit = client.post(

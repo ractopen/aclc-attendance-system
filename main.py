@@ -17,16 +17,18 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import StreamingResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import user_agents
 
 from database import (
     init_db, get_setting, set_setting, get_all_settings,
-    register_time_in, register_time_out, get_statistics, get_all_attendees,
+    register_time_in, register_time_out, scanner_record_time_in, void_unclosed_morning_time_ins,
+    get_statistics, get_all_attendees,
     get_sections_list, admin_manual_add_attendee, admin_edit_attendee, admin_delete_attendee, admin_clear_all_data,
     open_or_resume_evaluation, autosave_evaluation_draft, release_evaluation_lock,
     submit_evaluation, finalize_and_tally_incomplete_evaluations,
     get_passes_live_status, get_all_evaluations_for_export, recompute_all_attendees_eligibility,
+    load_sections_seed,
     format_time_str, get_db,
     get_eval_quiz_schema, save_eval_quiz_schema, reset_eval_quiz_schema,
     get_pending_certificate_student_ids, get_certificate_delivery_summary,
@@ -159,8 +161,8 @@ class TimeInPayload(BaseModel):
     last_name: str
     first_name: str
     middle_name: Optional[str] = "N/A"
-    sex: str
-    age: int = Field(..., ge=10, le=120)
+    sex: Optional[str] = "Unspecified"
+    age: Optional[int] = Field(default=None, ge=10, le=120)
     email: str
     level: str
     section: str
@@ -168,6 +170,12 @@ class TimeInPayload(BaseModel):
     strand: Optional[str] = None
     college_year: Optional[str] = None
     course: Optional[str] = None
+
+    @field_validator("age", mode="before")
+    def normalize_optional_age(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        return v
 
     @field_validator("student_id")
     def validate_student_id(cls, v):
@@ -216,9 +224,11 @@ class TimeInPayload(BaseModel):
 
     @field_validator("sex")
     def validate_sex(cls, v):
+        if not v:
+            return "Unspecified"
         v = v.strip()
         if not v:
-            raise ValueError("Sex / Gender identity is required.")
+            return "Unspecified"
         return re.sub(r"[<>]", "", v)[:50]
 
     @field_validator("email")
@@ -274,12 +284,14 @@ class ProjectorConfigPayload(BaseModel):
     proj_show_form_qr: bool = True
     proj_show_wifi_qr: bool = True
     wifi_ssid: Optional[str] = "HIV Awareness Attendance"
+    wifi_ssid_2: Optional[str] = ""
+    wifi_ssid_3: Optional[str] = ""
     wifi_password: Optional[str] = ""
     kiosk_url: Optional[str] = ""
     proj_announcement: Optional[str] = ""
 
 class ManualAddPayload(BaseModel):
-    student_id: str
+    student_id: Optional[str] = ""
     last_name: str
     first_name: str
     middle_name: Optional[str] = "N/A"
@@ -300,8 +312,8 @@ class EditAttendeePayload(BaseModel):
     last_name: str
     first_name: str
     middle_name: Optional[str] = "N/A"
-    sex: str
-    age: int = Field(..., ge=10, le=120)
+    sex: Optional[str] = "Unspecified"
+    age: Optional[int] = Field(default=None, ge=0, le=120)
     email: str
     level: str
     section: str
@@ -403,37 +415,70 @@ def get_host_wifi_ssid() -> str:
             pass
     return ssid
 
+def _get_configured_wifi_ssids() -> List[str]:
+    s1 = get_setting("wifi_ssid", "HIV Awareness Attendance").strip()
+    s2 = get_setting("wifi_ssid_2", "").strip()
+    s3 = get_setting("wifi_ssid_3", "").strip()
+    out: List[str] = []
+    for s in (s1, s2, s3):
+        if s and s not in out:
+            out.append(s)
+    return out or ["HIV Awareness Attendance"]
+
+
+def _normalize_http_kiosk_url(raw_url: Optional[str]) -> str:
+    """Ensures custom LAN URLs always use plain http:// (never https://) with no trailing slash."""
+    val = (raw_url or "").strip()
+    if not val:
+        return ""
+    if val.lower().startswith("https://"):
+        val = "http://" + val[8:]
+    elif not val.lower().startswith("http://"):
+        val = "http://" + val.lstrip("/")
+    return val.rstrip("/")
+
+
+def _format_projector_display_host(url: str) -> str:
+    """Strips http:// / https:// and :80 for large, easy-to-type projector IP display."""
+    cleaned = re.sub(r"^https?://", "", (url or "").strip(), flags=re.IGNORECASE).rstrip("/")
+    if cleaned.endswith(":80"):
+        cleaned = cleaned[:-3]
+    return cleaned
+
+
 def get_network_status_info() -> dict:
-    target_ssid = get_setting("wifi_ssid", "HIV Awareness Attendance").strip()
+    configured_ssids = _get_configured_wifi_ssids()
+    target_ssid = configured_ssids[0]
     active_ssid = get_host_wifi_ssid().strip()
     lan_ip = get_local_ip()
     port = os.environ.get("PORT", "8080")
     if active_ssid:
-        # When on Wi-Fi, only mark as event network if the active SSID matches the Wi-Fi QR SSID
-        is_event_wifi = (active_ssid == target_ssid)
+        # Mark as event network if the active SSID matches any configured Access Point (1, 2, or 3)
+        is_event_wifi = (active_ssid in configured_ssids)
     else:
         # Wired Ethernet fallback (no Wi-Fi SSID on host)
         is_event_wifi = lan_ip.startswith("192.168.0.") or lan_ip.startswith("192.168.1.")
     return {
         "active_ssid": active_ssid or "Ethernet / Wired",
         "target_ssid": target_ssid,
+        "target_ssids": configured_ssids,
         "is_event_wifi": is_event_wifi,
-        "qr_mismatch": bool(active_ssid and active_ssid != target_ssid),
+        "qr_mismatch": bool(active_ssid and active_ssid not in configured_ssids),
         "lan_ip": lan_ip,
         "port": port,
         "server_url": f"http://{lan_ip}:{port}/"
     }
 
 def get_base_url(request: Request) -> str:
-    custom = get_setting("kiosk_url", "").strip()
+    custom = _normalize_http_kiosk_url(get_setting("kiosk_url", ""))
     if custom:
-        return custom.rstrip("/")
+        return custom
     host_header = (request.headers.get("host") or "").strip()
     if ":" in host_header and not host_header.endswith("]"):
         host_part, port = host_header.rsplit(":", 1)
     else:
         host_part = host_header
-        port = os.environ.get("PORT", "8080")
+        port = str(request.url.port or os.environ.get("PORT", "8080"))
     local_hosts = {"", "localhost", "127.0.0.1", "0.0.0.0", "[::1]", "testserver"}
     if host_part.lower() not in local_hosts:
         return f"http://{host_part}:{port}"
@@ -493,9 +538,7 @@ def captive_portal_probe():
 
 @app.get("/captive", include_in_schema=False)
 def captive_portal_page(request: Request):
-    scheme = request.url.scheme or "http"
-    host = request.headers.get("host") or request.url.netloc or f"{get_local_ip()}:8080"
-    kiosk_url = f"{scheme}://{host}/"
+    kiosk_url = f"{get_base_url(request)}/"
     return templates.TemplateResponse(
         request=request,
         name="captive.html",
@@ -540,6 +583,8 @@ def kiosk_live(request: Request):
     session, status = get_session_and_status(phase)
     min_dur = get_setting("min_duration_minutes", "150")
     eval_open = get_setting("eval_open", "0") == "1"
+    wifi_ssids = _get_configured_wifi_ssids()
+    kiosk_url = _normalize_http_kiosk_url(get_setting("kiosk_url", ""))
     return {
         "event_title": get_setting("event_title", "HIV Awareness Seminar"),
         "active_session_label": f"{session} {status}",
@@ -555,9 +600,13 @@ def kiosk_live(request: Request):
         "event_date": get_setting("event_date", ""),
         "terms_and_conditions": get_setting("terms_and_conditions", ""),
         "wifi_ssid": get_setting("wifi_ssid", "HIV Awareness Attendance"),
+        "wifi_ssid_2": get_setting("wifi_ssid_2", ""),
+        "wifi_ssid_3": get_setting("wifi_ssid_3", ""),
+        "wifi_ssids": wifi_ssids,
         "wifi_password": get_setting("wifi_password", ""),
-        "kiosk_url": get_setting("kiosk_url", ""),
+        "kiosk_url": kiosk_url,
         "base_url": base_url,
+        "display_url": _format_projector_display_host(kiosk_url or base_url),
         "proj_show_form_qr": get_setting("proj_show_form_qr", "1") == "1",
         "proj_show_wifi_qr": get_setting("proj_show_wifi_qr", "1") == "1",
         "proj_announcement": get_setting("proj_announcement", ""),
@@ -574,6 +623,7 @@ def student_page(request: Request):
     terms = get_setting("terms_and_conditions", "")
     min_dur = get_setting("min_duration_minutes", "150")
     eval_open = get_setting("eval_open", "0") == "1"
+    wifi_ssids = _get_configured_wifi_ssids()
     return templates.TemplateResponse(
         request=request,
         name="student.html",
@@ -589,8 +639,12 @@ def student_page(request: Request):
             "terms_and_conditions": terms,
             "min_duration": int(float(min_dur)),
             "min_duration_label": format_duration_hm(min_dur),
+            "wifi_ssid": wifi_ssids[0],
+            "wifi_ssids": wifi_ssids,
+            "wifi_password": get_setting("wifi_password", ""),
             "eval_quiz_schema": get_eval_quiz_schema(),
-            "eval_quiz_version": int(float(get_setting("eval_quiz_version", "1") or "1"))
+            "eval_quiz_version": int(float(get_setting("eval_quiz_version", "1") or "1")),
+            "sections_seed": load_sections_seed()
         }
     )
 
@@ -722,9 +776,12 @@ def admin_page(request: Request, search: Optional[str] = None, level: Optional[s
             "min_duration": min_dur,
             "min_duration_label": format_duration_hm(min_dur),
             "wifi_ssid": settings.get("wifi_ssid", "HIV Awareness Attendance"),
+            "wifi_ssid_2": settings.get("wifi_ssid_2", ""),
+            "wifi_ssid_3": settings.get("wifi_ssid_3", ""),
             "wifi_password": settings.get("wifi_password", ""),
-            "kiosk_url": settings.get("kiosk_url", ""),
+            "kiosk_url": _normalize_http_kiosk_url(settings.get("kiosk_url", "")),
             "base_url": get_base_url(request),
+            "display_url": _format_projector_display_host(_normalize_http_kiosk_url(settings.get("kiosk_url", "")) or get_base_url(request)),
             "proj_show_form_qr": settings.get("proj_show_form_qr", "1") == "1",
             "proj_show_wifi_qr": settings.get("proj_show_wifi_qr", "1") == "1",
             "proj_announcement": settings.get("proj_announcement", ""),
@@ -732,7 +789,8 @@ def admin_page(request: Request, search: Optional[str] = None, level: Optional[s
             "stats": stats,
             "attendees": attendees,
             "eval_quiz_schema": get_eval_quiz_schema(),
-            "eval_quiz_version": int(float(get_setting("eval_quiz_version", "1") or "1"))
+            "eval_quiz_version": int(float(get_setting("eval_quiz_version", "1") or "1")),
+            "sections_seed": load_sections_seed()
         }
     )
 
@@ -742,8 +800,10 @@ def projector_page(request: Request):
     session, status = get_session_and_status(phase)
     event_title = get_setting("event_title", "HIV Awareness Seminar")
     base_url = get_base_url(request)
+    kiosk_url = _normalize_http_kiosk_url(get_setting("kiosk_url", ""))
     min_dur = get_setting("min_duration_minutes", "150")
     eval_open = get_setting("eval_open", "0") == "1"
+    wifi_ssids = _get_configured_wifi_ssids()
     return templates.TemplateResponse(
         request=request,
         name="projector.html",
@@ -755,11 +815,15 @@ def projector_page(request: Request):
             "event_title": event_title,
             "active_session_label": f"{session} {status}",
             "base_url": base_url,
+            "display_url": _format_projector_display_host(kiosk_url or base_url),
             "min_duration": min_dur,
             "min_duration_label": format_duration_hm(min_dur),
             "wifi_ssid": get_setting("wifi_ssid", "HIV Awareness Attendance"),
+            "wifi_ssid_2": get_setting("wifi_ssid_2", ""),
+            "wifi_ssid_3": get_setting("wifi_ssid_3", ""),
+            "wifi_ssids": wifi_ssids,
             "wifi_password": get_setting("wifi_password", ""),
-            "kiosk_url": get_setting("kiosk_url", ""),
+            "kiosk_url": kiosk_url,
             "proj_show_form_qr": get_setting("proj_show_form_qr", "1") == "1",
             "proj_show_wifi_qr": get_setting("proj_show_wifi_qr", "1") == "1",
             "proj_announcement": get_setting("proj_announcement", "")
@@ -781,16 +845,18 @@ def generate_qr(request: Request):
     qr.add_data(target_url)
     qr.make(fit=True)
     
-    img = qr.make_image(fill_color="#0A3981", back_color="#FFFFFF")
+    img = qr.make_image(fill_color="#000000", back_color="#FFFFFF")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
     return Response(content=buf.getvalue(), media_type="image/png")
 
 @app.get("/api/qr/wifi")
-def generate_wifi_qr():
-    """Generates standard Wi-Fi quick-connect QR code"""
-    ssid = get_setting("wifi_ssid", "HIV Awareness Attendance")
+def generate_wifi_qr(ap: int = 1):
+    """Generates standard Wi-Fi quick-connect QR code for Access Point 1, 2, or 3."""
+    ssids = _get_configured_wifi_ssids()
+    idx = max(0, min(len(ssids) - 1, (ap or 1) - 1))
+    ssid = ssids[idx]
     pwd = get_setting("wifi_password", "")
     auth = "WPA" if pwd else "nopass"
     wifi_data = f"WIFI:S:{ssid};T:{auth};P:{pwd};;"
@@ -803,7 +869,7 @@ def generate_wifi_qr():
     qr.add_data(wifi_data)
     qr.make(fit=True)
     
-    img = qr.make_image(fill_color="#0A3981", back_color="#FFFFFF")
+    img = qr.make_image(fill_color="#000000", back_color="#FFFFFF")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
@@ -875,32 +941,58 @@ def attendance_time_in(payload: TimeInPayload, request: Request):
     result["level"] = payload.level
     return result
 
+def _resolve_scanned_student_id(raw_value: str) -> Tuple[Optional[str], Optional[str]]:
+    """Parses manual Student ID or ACLC:ID:TOKEN QR payload and verifies HMAC-SHA256 signature."""
+    raw_id = (raw_value or "").strip()
+    if not raw_id:
+        return None, "Please enter or scan a Student ID."
+    if raw_id.upper().startswith("ACLC:"):
+        parts = raw_id.split(":")
+        if len(parts) != 3:
+            return None, "Invalid QR pass format."
+        student_id = parts[1].strip().upper()
+        provided_token = parts[2].strip().upper()
+        if not verify_pass_token(student_id, provided_token):
+            return None, "Invalid or forged QR pass signature."
+        return student_id, None
+    return raw_id.upper(), None
+
+
 @app.post("/api/attendance/out")
 def attendance_time_out(payload: TimeOutPayload, request: Request):
     if not check_admin_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized. Time Out must be recorded through the Scanner.")
-        
+
     phase = get_setting("current_phase", "MORNING_OUT")
     if phase not in ("MORNING_OUT", "AFTERNOON_OUT"):
         return {"status": "error", "message": "Time Out is not open yet."}
-        
-    raw_id = payload.student_id.strip()
-    # Verify Salted HMAC-SHA256 signature on QR scans (ACLC:ID:TOKEN)
-    if raw_id.startswith("ACLC:"):
-        parts = raw_id.split(":")
-        if len(parts) != 3:
-            return {"status": "error", "message": "Invalid QR pass format."}
-        student_id = parts[1].strip().upper()
-        provided_token = parts[2].strip().upper()
-        if not verify_pass_token(student_id, provided_token):
-            return {"status": "error", "message": "Invalid or forged QR pass signature."}
-    else:
-        student_id = raw_id.upper()
-        
+
+    student_id, err_msg = _resolve_scanned_student_id(payload.student_id)
+    if err_msg:
+        return {"status": "error", "message": err_msg}
+
     ip_addr, _ = get_client_device_info(request)
     min_dur = float(get_setting("min_duration_minutes", "150"))
     result = register_time_out(student_id, phase, min_dur, ip_address=ip_addr)
     return result
+
+
+@app.post("/api/admin/scanner-time-in")
+def admin_scanner_time_in(payload: TimeOutPayload, request: Request):
+    """Allows Admin/Officer Scanner to scan QR passes or Student IDs for Morning/Afternoon Time In."""
+    if not check_admin_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized. Admin/Officer login required.")
+
+    phase = get_setting("current_phase", "MORNING_IN")
+    if phase not in ("MORNING_IN", "AFTERNOON_IN"):
+        return {"status": "error", "message": "Time In is currently closed. Switch phase to Morning In or Afternoon In."}
+
+    student_id, err_msg = _resolve_scanned_student_id(payload.student_id)
+    if err_msg:
+        return {"status": "error", "message": err_msg}
+
+    ip_addr, _ = get_client_device_info(request)
+    return scanner_record_time_in(student_id, phase, ip_address=ip_addr)
 
 @app.get("/api/admin/sections")
 def fetch_sections(request: Request):
@@ -925,9 +1017,10 @@ def batch_timeout(payload: BatchTimeOutPayload, request: Request):
 
 def _build_pass_dict(row) -> Dict[str, Any]:
     sid = row["student_id"]
-    time_stamp = row["morning_in"] or row["afternoon_in"] or "Timed In"
+    time_stamp = row["afternoon_in"] or row["morning_in"] or "Timed In"
     time_fmt = format_time_str(time_stamp) if time_stamp != "Timed In" else "Timed In"
     tok = compute_pass_token(sid)
+    keys = row.keys()
     return {
         "student_id": sid,
         "student_name": row["full_name"],
@@ -935,6 +1028,15 @@ def _build_pass_dict(row) -> Dict[str, Any]:
         "level": row["level"],
         "time": time_stamp,
         "time_fmt": time_fmt,
+        "morning_in_fmt": format_time_str(row["morning_in"]),
+        "morning_out_fmt": format_time_str(row["morning_out"]),
+        "afternoon_in_fmt": format_time_str(row["afternoon_in"]),
+        "afternoon_out_fmt": format_time_str(row["afternoon_out"]),
+        "has_morning_in": bool(row["morning_in"]),
+        "has_morning_out": bool(row["morning_out"]),
+        "has_afternoon_in": bool(row["afternoon_in"]),
+        "has_afternoon_out": bool(row["afternoon_out"]),
+        "morning_voided": bool(row["morning_voided"]) if "morning_voided" in keys else False,
         "token": tok,
         "qr_data": f"ACLC:{sid}:{tok}",
         "eval_status": row["eval_status"] or "PENDING",
@@ -944,37 +1046,115 @@ def _build_pass_dict(row) -> Dict[str, Any]:
     }
 
 
+def _norm_lookup_name(val: Optional[str]) -> str:
+    cleaned = re.sub(r"[,.]", " ", str(val or "").upper())
+    return " ".join(cleaned.split())
+
+
 # Verified Pass Lookup for recovering a lost pass or loading a classmate's pass
 @app.get("/api/attendance/pass-lookup")
-def pass_lookup(student_id: Optional[str] = None, q: Optional[str] = None, last_name: Optional[str] = None):
+def pass_lookup(
+    student_id: Optional[str] = None,
+    q: Optional[str] = None,
+    age: Optional[str] = None,
+    last_name: Optional[str] = None
+):
     raw_query = (q if q is not None else student_id) or ""
-    query = raw_query.strip()
-    ln_query = " ".join((last_name or "").strip().split()).upper()
-    if not query or not ln_query:
-        return {"status": "error", "message": "Please enter both your ID/Email and Last Name to load a pass."}
+    query = " ".join(raw_query.strip().split())
+    age_str = (age or "").strip()
+    ln_query = _norm_lookup_name(last_name)
+
+    if not query or (not age_str and not ln_query and q is None):
+        return {"status": "error", "message": "Please enter your Name (or Student ID/Email) and Age to recover a pass."}
 
     conn = get_db()
     cursor = conn.cursor()
     upper_q = query.upper()
 
-    # Exact Student ID or Email match + Last Name verification
-    row = cursor.execute(
+    # Primary flow: Name / Student ID / Email + Age (or age=0 when Age was skipped at Time-In)
+    if age_str or (q is not None and not ln_query):
+        if age_str:
+            if not age_str.isdigit():
+                conn.close()
+                return {"status": "error", "message": "Please enter a valid numeric Age (10 to 120)."}
+            age_int = int(age_str)
+            if age_int < 10 or age_int > 120:
+                conn.close()
+                return {"status": "error", "message": "Age must be between 10 and 120."}
+            candidates = cursor.execute(
+                "SELECT * FROM attendees WHERE age = ? ORDER BY id DESC",
+                (age_int,)
+            ).fetchall()
+        else:
+            candidates = cursor.execute(
+                "SELECT * FROM attendees WHERE age = 0 OR age IS NULL ORDER BY id DESC"
+            ).fetchall()
+        conn.close()
+
+        norm_q = _norm_lookup_name(query)
+        q_tokens = [t for t in norm_q.split() if t]
+        matches = []
+        for r in candidates:
+            r_sid = (r["student_id"] or "").strip().upper()
+            r_email = (r["email"] or "").strip().upper()
+            if r_sid == upper_q or (r_email and r_email == upper_q):
+                matches.append(r)
+                continue
+
+            r_ln = _norm_lookup_name(r["last_name"])
+            r_fn = _norm_lookup_name(r["first_name"])
+            raw_mn = (r["middle_name"] or "").strip()
+            r_mn = "" if raw_mn.upper() in ("", "N/A", "NA", "NONE", "-") else _norm_lookup_name(raw_mn)
+            r_full = _norm_lookup_name(r["full_name"])
+            first_last = " ".join(p for p in (r_fn, r_ln) if p)
+            last_first = " ".join(p for p in (r_ln, r_fn) if p)
+            first_mid_last = " ".join(p for p in (r_fn, r_mn, r_ln) if p)
+
+            if norm_q in (first_last, last_first, first_mid_last, r_full, r_ln, r_fn):
+                matches.append(r)
+                continue
+
+            if len(q_tokens) >= 2:
+                cand_tokens = set(first_mid_last.split())
+                if all(any(ct == qt or (len(qt) >= 2 and ct.startswith(qt)) for ct in cand_tokens) for qt in q_tokens):
+                    matches.append(r)
+
+        if not matches:
+            return {"status": "error", "message": "No matching attendee found. Check that both your Name (or ID/Email) and Age match your Time In registration."}
+        if len(matches) == 1:
+            res = _build_pass_dict(matches[0])
+            res["status"] = "success"
+            return res
+        return {
+            "status": "multiple",
+            "message": f"Found {len(matches)} matching attendees. Click your name and section below to load your pass:",
+            "matches": [_build_pass_dict(r) for r in matches[:15]]
+        }
+
+    # Backwards-compatible Student ID / Email + Last Name match
+    rows = cursor.execute(
         """
         SELECT * FROM attendees
         WHERE (UPPER(TRIM(student_id)) = ? OR UPPER(TRIM(email)) = ?)
           AND UPPER(TRIM(last_name)) = ?
-        LIMIT 1
+        ORDER BY id DESC
+        LIMIT 15
         """,
         (upper_q, upper_q, ln_query)
-    ).fetchone()
+    ).fetchall()
     conn.close()
 
-    if not row:
+    if not rows:
         return {"status": "error", "message": "No matching attendee found. Check that both your ID/Email and Last Name match your Time In registration."}
-
-    res = _build_pass_dict(row)
-    res["status"] = "success"
-    return res
+    if len(rows) == 1:
+        res = _build_pass_dict(rows[0])
+        res["status"] = "success"
+        return res
+    return {
+        "status": "multiple",
+        "message": f"Found {len(rows)} matching attendees. Click your name and section below to load your pass:",
+        "matches": [_build_pass_dict(r) for r in rows]
+    }
 
 @app.post("/api/attendance/passes-status")
 def passes_live_status(payload: PassesStatusPayload):
@@ -1005,6 +1185,13 @@ async def api_admin_save_eval_schema(request: Request):
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid quiz schema payload.")
+    enabled_total = sum(
+        1 for pk in ("part1", "part2", "part3")
+        for it in (body.get(pk) or [])
+        if isinstance(it, dict) and bool(it.get("enabled", True)) and str(it.get("text") or "").strip()
+    )
+    if enabled_total == 0:
+        raise HTTPException(status_code=400, detail="At least one active question is required in the evaluation quiz.")
     schema, new_ver = save_eval_quiz_schema(body)
     return {"status": "success", "version": new_ver, "schema": schema}
 
@@ -1153,10 +1340,19 @@ def admin_get_evaluation_detail(student_id: str, request: Request):
     conn.close()
     if not att:
         return {"status": "error", "message": "Attendee not found."}
+    ev_dict = dict(ev) if ev else None
+    draft_dict = {}
+    if ev_dict and ev_dict.get("draft_json"):
+        try:
+            draft_dict = json.loads(ev_dict["draft_json"])
+        except Exception:
+            draft_dict = {}
     return {
         "status": "success",
         "attendee": dict(att),
-        "evaluation": dict(ev) if ev else None
+        "evaluation": ev_dict,
+        "draft": draft_dict,
+        "schema": get_eval_quiz_schema()
     }
 
 @app.post("/api/admin/set-phase")
@@ -1166,10 +1362,20 @@ def set_phase(payload: PhasePayload, request: Request):
     valid_phases = ["MORNING_IN", "MORNING_OUT", "AFTERNOON_IN", "AFTERNOON_OUT", "LOCKED"]
     if payload.phase not in valid_phases:
         raise HTTPException(status_code=400, detail="Invalid phase")
+    voided_morning_count = 0
+    if payload.phase in ("AFTERNOON_IN", "AFTERNOON_OUT"):
+        min_dur = float(get_setting("min_duration_minutes", "150") or "150")
+        voided_morning_count = void_unclosed_morning_time_ins(min_dur)
     set_setting("current_phase", payload.phase)
     session, status = get_session_and_status(payload.phase)
     set_setting("active_session_label", f"{session} {status}")
-    return {"status": "success", "phase": payload.phase, "session": session, "event_status": status}
+    return {
+        "status": "success",
+        "phase": payload.phase,
+        "session": session,
+        "event_status": status,
+        "voided_morning_count": voided_morning_count,
+    }
 
 @app.post("/api/admin/set-qr-mode")
 def set_qr_mode(payload: QRModePayload, request: Request):
@@ -1199,7 +1405,12 @@ def set_kiosk_config(payload: KioskConfigPayload, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     set_setting("event_title", payload.event_title)
     set_setting("active_session_label", payload.active_session_label or "")
-    if payload.current_phase:
+    valid_phases = ("MORNING_IN", "MORNING_OUT", "AFTERNOON_IN", "AFTERNOON_OUT", "LOCKED")
+    if payload.current_phase and payload.current_phase in valid_phases:
+        old_phase = get_setting("current_phase", "MORNING_IN")
+        if payload.current_phase != old_phase and payload.current_phase in ("AFTERNOON_IN", "AFTERNOON_OUT"):
+            min_dur = float(get_setting("min_duration_minutes", "150") or "150")
+            void_unclosed_morning_time_ins(min_dur)
         set_setting("current_phase", payload.current_phase)
     set_setting("event_date", payload.event_date)
     set_setting("venue", payload.venue)
@@ -1215,10 +1426,13 @@ def set_projector_config(payload: ProjectorConfigPayload, request: Request):
     set_setting("proj_show_form_qr", "1" if payload.proj_show_form_qr else "0")
     set_setting("proj_show_wifi_qr", "1" if payload.proj_show_wifi_qr else "0")
     set_setting("wifi_ssid", (payload.wifi_ssid or "HIV Awareness Attendance").strip())
+    set_setting("wifi_ssid_2", (payload.wifi_ssid_2 or "").strip())
+    set_setting("wifi_ssid_3", (payload.wifi_ssid_3 or "").strip())
     set_setting("wifi_password", payload.wifi_password.strip() if payload.wifi_password else "")
-    set_setting("kiosk_url", payload.kiosk_url.strip() if payload.kiosk_url else "")
+    normalized_url = _normalize_http_kiosk_url(payload.kiosk_url)
+    set_setting("kiosk_url", normalized_url)
     set_setting("proj_announcement", payload.proj_announcement.strip() if payload.proj_announcement else "")
-    return {"status": "success", "config": payload.model_dump()}
+    return {"status": "success", "config": {**payload.model_dump(), "kiosk_url": normalized_url}}
 
 @app.get("/api/admin/network-status")
 def admin_network_status(request: Request):
@@ -1283,7 +1497,7 @@ def export_deped_csv(request: Request):
     for a in attendees:
         writer.writerow([
             a["student_id"], a.get("last_name") or "", a.get("first_name") or "", a.get("middle_name") or "", a["full_name"],
-            a["sex"], a["age"], a["level"],
+            a["sex"], (a["age"] if a["age"] and a["age"] > 0 else ""), a["level"],
             a["shs_grade"] or "", a["strand"] or "", a["college_year"] or "", a["course"] or "", a["section"],
             a["email"], a.get("ip_address") or "", a.get("device_info") or "",
             a["morning_in"] or "", a["morning_out"] or "", a["morning_duration_min"],
@@ -1348,10 +1562,18 @@ def export_evaluation_csv(request: Request):
     if not check_admin_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     records = get_all_evaluations_for_export()
+    schema = get_eval_quiz_schema()
+    standard_qids = {f"q1_{i}" for i in range(1, 11)} | {f"q{p}_{j}" for p in (2, 3) for j in range(1, 4)}
+    custom_items = [
+        item for pk in ("part1", "part2", "part3")
+        for item in (schema.get(pk) or [])
+        if isinstance(item, dict) and item.get("id") and item.get("id") not in standard_qids
+    ]
+
     output = io.StringIO()
     writer = csv.writer(output)
 
-    writer.writerow([
+    headers = [
         "Student ID", "Full Name", "Sex", "Age", "Academic Level", "Section", "Email",
         "Evaluation Status", "Tallied Mode", "Submitted Timestamp", "Part I Average (1-5)",
         "Q1.1 Objectives Clearly Presented",
@@ -1370,12 +1592,21 @@ def export_evaluation_csv(request: Request):
         "Q3.1 Most Helpful Part of Seminar",
         "Q3.2 Topics Related to HIV Awareness to Learn More About",
         "Q3.3 Suggestions to Improve Future Seminars",
-        "Attendance Duration Met", "Certificate Eligible"
-    ])
+    ]
+    for ci in custom_items:
+        headers.append(f"Custom: {ci.get('text') or ci.get('id')}")
+    headers.extend(["Attendance Duration Met", "Certificate Eligible"])
+    writer.writerow(headers)
 
     for r in records:
-        writer.writerow([
-            r["student_id"], r["full_name"], r["sex"], r["age"], r["level"], r["section"], r["email"],
+        draft_map = {}
+        if r.get("draft_json"):
+            try:
+                draft_map = json.loads(r["draft_json"])
+            except Exception:
+                draft_map = {}
+        row = [
+            r["student_id"], r["full_name"], r["sex"], (r["age"] if r["age"] and r["age"] > 0 else ""), r["level"], r["section"], r["email"],
             r["e_status"],
             "Auto-Tallied Draft" if r.get("is_auto_tallied") else "Direct Submit",
             r.get("submitted_at") or r.get("updated_at") or "",
@@ -1384,9 +1615,15 @@ def export_evaluation_csv(request: Request):
             r.get("q1_6") or "", r.get("q1_7") or "", r.get("q1_8") or "", r.get("q1_9") or "", r.get("q1_10") or "",
             r.get("q2_1") or "", r.get("q2_2") or "", r.get("q2_3") or "",
             r.get("q3_1") or "", r.get("q3_2") or "", r.get("q3_3") or "",
+        ]
+        for ci in custom_items:
+            val = draft_map.get(ci.get("id"))
+            row.append("" if val is None else val)
+        row.extend([
             "YES" if r.get("attendance_eligible") else "NO",
             "YES" if r.get("is_eligible") else "NO"
         ])
+        writer.writerow(row)
 
     output.seek(0)
     filename = f"ACLC_HIV_Awareness_Evaluations_{datetime.now().strftime('%Y%m%d')}.csv"

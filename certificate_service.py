@@ -734,6 +734,12 @@ def get_quality_dashboard_data(grace_minutes: float = 10.0) -> Dict[str, Any]:
 
     eligible: List[Dict[str, Any]] = []
     near_miss: List[Dict[str, Any]] = []
+    email_counts: Dict[str, int] = {}
+    for a in attendees:
+        if a.get("is_eligible"):
+            em = (a.get("email") or "").strip().lower()
+            if em:
+                email_counts[em] = email_counts.get(em, 0) + 1
 
     for a in attendees:
         m_dur = float(a.get("morning_duration_min") or 0) if a.get("morning_out") else 0.0
@@ -744,6 +750,15 @@ def get_quality_dashboard_data(grace_minutes: float = 10.0) -> Dict[str, Any]:
 
         if a.get("is_eligible"):
             q = analyze_attendee_quality(a, settings)
+            em = (a.get("email") or "").strip().lower()
+            if em and email_counts.get(em, 0) > 1:
+                q["flags"].append({
+                    "level": "warning",
+                    "code": "duplicate_email",
+                    "msg": f"Shared email with {email_counts[em] - 1} other eligible attendee(s)"
+                })
+                if q["severity"] == "clean":
+                    q["severity"] = "warning"
             eligible.append({
                 "student_id": a["student_id"],
                 "last_name": a.get("last_name") or "",
