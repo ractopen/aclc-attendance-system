@@ -64,17 +64,17 @@ if "%NEED_VENV%"=="1" (
 )
 
 :: 3. Verify all required packages are ready
-"venv\Scripts\python.exe" -c "import fastapi, uvicorn, qrcode, PIL, jinja2, user_agents" >nul 2>nul
+"venv\Scripts\python.exe" -c "import fastapi, uvicorn, qrcode, PIL, jinja2, user_agents, reportlab" >nul 2>nul
 if %errorlevel% neq 0 (
     echo [INFO] Installing required dependencies from requirements.txt...
     "venv\Scripts\python.exe" -m pip install -r requirements.txt
 )
 
 :: 4. Detect available port (8080 default, fallback 8000/8081/8888) and network info
-for /f %%i in ('"venv\Scripts\python.exe" -c "import socket; p=next((x for x in (8080,8000,8081,8888) if socket.socket(socket.AF_INET,socket.SOCK_STREAM).connect_ex(('127.0.0.1',x))!=0),8080); print(p)"') do set "PORT=%%i"
+for /f "usebackq" %%i in (`venv\Scripts\python.exe -c "import socket; p=next((x for x in (8080,8000,8081,8888) if socket.socket(socket.AF_INET,socket.SOCK_STREAM).connect_ex(('127.0.0.1',x))),8080); print(p)"`) do set "PORT=%%i"
 if "%PORT%"=="" set "PORT=8080"
 
-for /f "tokens=1-4 delims=|" %%a in ('"venv\Scripts\python.exe" -c "from main import get_network_status_info; i=get_network_status_info(); print(f\"{i['active_ssid']}|{i['target_ssid']}|{'1' if i['is_event_wifi'] else '0'}|{i['lan_ip']}\")" 2^>nul') do (
+for /f "usebackq tokens=1-4 delims=|" %%a in (`venv\Scripts\python.exe -c "from main import get_network_status_info; i=get_network_status_info(); sep=chr(124); print(i['active_ssid']+sep+i['target_ssid']+sep+('1' if i['is_event_wifi'] else '0')+sep+i['lan_ip'])" 2^>nul`) do (
     set "ACTIVE_SSID=%%a"
     set "TARGET_SSID=%%b"
     set "IS_EVENT_WIFI=%%c"
