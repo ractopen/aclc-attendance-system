@@ -4,220 +4,957 @@
 
 {% block extra_head %}
 <style>
-  body {
-    background: linear-gradient(145deg, #061A3A 0%, #0A2558 55%, #4C0519 100%) !important;
-    color: #FFFFFF !important;
-    overflow-x: hidden;
+  /* Override base.html dark/light theme for a crisp, high-contrast infographic canvas */
+  html, body {
+    background: linear-gradient(180deg, #FFF5F5 0%, #FFFFFF 50%, #FFF5F5 100%) !important;
+    color: #0F172A !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  .proj-shell {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #FFF5F5 0%, #FFFFFF 48%, #FFF5F5 100%);
+    color: #0F172A;
+  }
+
+  .proj-bg-art {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .proj-bg-art svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .proj-hero,
+  .proj-announcement-wrap,
+  .proj-main,
+  .proj-footer {
+    position: relative;
+    z-index: 1;
+  }
+
+  @media (min-width: 992px) {
+    body {
+      overflow: hidden;
+    }
+    .proj-shell {
+      height: 100vh;
+      overflow: hidden;
+    }
+  }
+
+  /* 1. Cinematic Infographic Hero Header */
+  .proj-hero {
+    background: linear-gradient(130deg, #0B132B 0%, #5C0A14 48%, #B91C1C 100%);
+    color: #FFFFFF;
+    padding: clamp(10px, 1.5vh, 18px) clamp(16px, 2.2vw, 32px);
+    position: relative;
+    overflow: hidden;
+    border-bottom: 4px solid #F59E0B;
+    box-shadow: 0 6px 18px rgba(127, 29, 29, 0.25);
+    flex-shrink: 0;
+  }
+  .proj-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 88% 22%, rgba(255, 255, 255, 0.10) 0%, transparent 45%),
+      repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.03) 0px,
+        rgba(255, 255, 255, 0.03) 2px,
+        transparent 2px,
+        transparent 14px
+      );
+    pointer-events: none;
+  }
+  .proj-hero-inner {
+    position: relative;
+    z-index: 2;
+    max-width: 1520px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 20px;
+  }
+  .proj-hero-left {
+    display: flex;
+    align-items: center;
+    gap: clamp(10px, 1.4vw, 18px);
+    min-width: 0;
+    flex: 1 1 360px;
+    max-width: 100%;
+  }
+  @media (max-width: 575.98px) {
+    .proj-hero-left {
+      flex-direction: column;
+      text-align: center;
+    }
+  }
+  .logos-group {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    padding: 5px 9px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .logo-badge {
+    width: clamp(32px, 4.4vh, 44px);
+    height: clamp(32px, 4.4vh, 44px);
+    border-radius: 50%;
+    background: #FFFFFF;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+  .logo-badge img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 50%;
+  }
+  .proj-title-block {
+    min-width: 0;
+  }
+  .proj-title-block h1 {
+    font-size: clamp(1.35rem, 2.4vw, 2.15rem);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    line-height: 1.05;
+    text-transform: uppercase;
+    color: #FFFFFF;
+    margin: 0 0 2px 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  }
+  .proj-tagline {
+    font-size: clamp(0.72rem, 1.05vw, 0.9rem);
+    font-weight: 700;
+    color: #FDE68A;
+    letter-spacing: 0.03em;
+    margin-bottom: 3px;
+  }
+  .proj-status-line {
+    font-size: clamp(0.78rem, 1.1vw, 0.96rem);
+    font-weight: 700;
+    color: #FFFFFF;
+    opacity: 0.95;
+  }
+  .proj-hero-right {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 0 1 auto;
+    max-width: 100%;
+    min-width: 0;
+  }
+  @media (max-width: 991.98px) {
+    .proj-hero-right {
+      flex: 1 1 100%;
+      justify-content: center;
+    }
+  }
+  .meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: clamp(0.72rem, 0.95vw, 0.86rem);
+    font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .meta-chip.eval-open {
+    background: #15803D;
+    border-color: #86EFAC;
+  }
+  .meta-chip.eval-closed {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(148, 163, 184, 0.45);
+    color: #E2E8F0;
+  }
+  .proj-clock-box {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 6, 23, 0.84);
+    border: 2px solid #F59E0B;
+    border-radius: 12px;
+    padding: 4px 14px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    line-height: 1.05;
+  }
+  .proj-clock-label {
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    color: #FCD34D;
+    text-transform: uppercase;
+    margin-bottom: 1px;
+  }
+  .proj-clock-time {
+    font-size: clamp(1.35rem, 2.3vw, 2.05rem);
+    font-weight: 900;
+    color: #FFFFFF;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .ribbon-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(254, 202, 202, 0.45);
+    padding: 4px 10px;
+    border-radius: 10px;
+  }
+  .ribbon-pill-text {
+    text-align: right;
+    line-height: 1.15;
+  }
+  .ribbon-pill-text .top {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #FECACA;
+    text-transform: uppercase;
+  }
+  .ribbon-pill-text .sub {
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: 0.04em;
+  }
+
+  /* Live Announcement Banner */
+  .proj-announcement-wrap {
+    max-width: 1520px;
+    width: 100%;
+    margin: clamp(8px, 1vh, 12px) auto 0 auto;
+    padding: 0 clamp(14px, 2vw, 28px);
+    flex-shrink: 0;
+  }
+  .proj-announcement-box {
+    background: linear-gradient(90deg, #FEF3C7 0%, #FFFBEB 50%, #FEF3C7 100%);
+    border: 2px solid #F59E0B;
+    color: #78350F;
+    border-radius: 10px;
+    padding: 6px 16px;
+    font-size: clamp(0.85rem, 1.25vw, 1.08rem);
+    font-weight: 800;
+    text-align: center;
+    box-shadow: 0 3px 10px rgba(245, 158, 11, 0.16);
+  }
+
+  /* 2. Main Laptop-Friendly Landscape Infographic Body */
+  .proj-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 1520px;
+    margin: 0 auto;
+    padding: clamp(10px, 1.5vh, 18px) clamp(14px, 2vw, 28px) clamp(6px, 1vh, 12px) clamp(14px, 2vw, 28px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .proj-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(12px, 1.5vw, 22px);
+    align-items: stretch;
+    min-height: 0;
+  }
+  @media (min-width: 992px) {
+    .proj-grid {
+      grid-template-columns: minmax(255px, 1fr) minmax(255px, 1fr) minmax(320px, 1.22fr);
+    }
+    .proj-grid.single-qr {
+      grid-template-columns: minmax(290px, 0.95fr) minmax(360px, 1.35fr);
+    }
+    .proj-grid.no-qr {
+      grid-template-columns: 1fr 1.2fr;
+    }
+  }
+
+  /* High-Contrast App-Style QR Cards */
+  .qr-card {
+    background: #FFFFFF;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1.5px solid #FECACA;
+    box-shadow: 0 6px 18px rgba(185, 28, 28, 0.10);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .qr-card.portal {
+    border-color: #CBD5E1;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.10);
+  }
+  .qr-card-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: clamp(8px, 1.1vh, 12px) 14px;
+    color: #FFFFFF;
+    font-size: clamp(0.84rem, 1.15vw, 1.02rem);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .qr-card-hdr.wifi {
+    background: linear-gradient(90deg, #B91C1C 0%, #DC2626 100%);
+  }
+  .qr-card-hdr.portal {
+    background: linear-gradient(90deg, #0F172A 0%, #1E293B 100%);
+  }
+  .qr-card-body {
+    padding: clamp(10px, 1.4vh, 16px) clamp(12px, 1.4vw, 18px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    flex: 1 1 auto;
+    justify-content: space-between;
+    gap: clamp(5px, 0.8vh, 8px);
+  }
+  .proj-subpill-slot {
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ap-rot-badge {
+    background: #DCFCE7;
+    color: #166534;
+    border: 1px solid #86EFAC;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  .portal-sub-badge {
+    background: #EFF6FF;
+    color: #1E3A8A;
+    border: 1px solid #93C5FD;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
   }
   .qr-frame {
+    padding: clamp(6px, 0.9vh, 10px);
     background: #FFFFFF;
-    border: 6px solid var(--aclc-gold);
-    border-radius: 16px;
-    padding: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    display: inline-block;
+    border: 2px solid #F1F5F9;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px #E2E8F0, 0 4px 12px rgba(0, 0, 0, 0.06);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
-  .qr-card-box {
-    background: rgba(10, 37, 86, 0.94);
-    border: 2px solid rgba(234, 163, 21, 0.65);
-    border-radius: 16px;
-    padding: 24px 28px;
-    min-width: 340px;
-    max-width: 470px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  .qr-frame img {
+    width: clamp(135px, 21vh, 205px);
+    height: clamp(135px, 21vh, 205px);
+    display: block;
+    object-fit: contain;
   }
-  .proj-subtext {
-    color: #E2E8F0 !important;
+  .qr-ssid-main {
+    font-size: clamp(0.95rem, 1.35vw, 1.2rem);
+    font-weight: 900;
+    color: #0F172A;
+    line-height: 1.2;
   }
-  .proj-ip-pill {
-    display: inline-block;
-    background: #020617;
-    color: #FFFFFF;
-    border: 2px solid var(--aclc-gold);
-    border-radius: 999px;
-    padding: 10px 22px;
-    font-size: clamp(1.1rem, 1.8vw, 1.55rem);
-    font-weight: 800;
-    letter-spacing: 0.01em;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-    white-space: nowrap;
-    max-width: 100%;
+  .qr-label-muted {
+    font-size: clamp(0.74rem, 0.95vw, 0.84rem);
+    color: #475569;
+    font-weight: 600;
+  }
+  .proj-ap-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
   }
   .proj-ap-pill {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    padding: 7px 12px;
-    border-radius: 8px;
-    background: rgba(2, 6, 23, 0.65);
-    border: 1px solid rgba(226, 232, 240, 0.25);
-    color: #E2E8F0;
-    font-size: 0.85rem;
+    padding: 5px 10px;
+    border-radius: 7px;
+    background: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    color: #334155;
+    font-size: 0.78rem;
+    font-weight: 600;
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   }
   .proj-ap-pill:hover {
-    background: rgba(15, 23, 42, 0.85);
-    border-color: rgba(234, 163, 21, 0.75);
+    background: #F1F5F9;
+    border-color: #94A3B8;
   }
   .proj-ap-pill:active {
     transform: scale(0.99);
   }
   .proj-ap-pill.is-active {
-    border: 2px solid #22C55E;
-    background: rgba(34, 197, 94, 0.24);
-    box-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
-    color: #FFFFFF;
-    font-weight: 700;
+    border: 1.5px solid #16A34A;
+    background: #DCFCE7;
+    color: #14532D;
+    font-weight: 800;
   }
-  .proj-subpill-slot {
-    min-height: 28px;
+  .proj-ap-pill .ap-ssid-txt {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-weight: 800;
+    color: #0F172A;
+  }
+  .proj-ap-pill .ap-active-tag {
+    background: #16A34A;
+    color: #FFFFFF;
+    font-size: 0.64rem;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 5px;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: clamp(0.74rem, 0.98vw, 0.86rem);
+    font-weight: 800;
+    letter-spacing: 0.03em;
+  }
+  .status-pill.open {
+    background: #DCFCE7;
+    color: #166534;
+    border: 1.5px solid #22C55E;
+  }
+  .status-pill.pwd {
+    background: #FEE2E2;
+    color: #991B1B;
+    border: 1.5px solid #F87171;
+  }
+  .url-box {
+    width: 100%;
+    background: #FEF2F2;
+    border: 2px solid #DC2626;
+    border-radius: 9px;
+    padding: clamp(7px, 1vh, 10px) 12px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: clamp(1rem, 1.55vw, 1.38rem);
+    font-weight: 900;
+    color: #991B1B;
+    letter-spacing: 0.02em;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.12);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .offline-pill {
+    display: inline-block;
+    background: #EFF6FF;
+    color: #1E3A8A;
+    border: 1px solid #93C5FD;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: clamp(0.7rem, 0.9vw, 0.8rem);
+    font-weight: 800;
+  }
+  .qr-tip {
+    font-size: clamp(0.7rem, 0.88vw, 0.78rem);
+    color: #475569;
+    line-height: 1.3;
+    border-top: 1px solid #F1F5F9;
+    padding-top: 6px;
+    width: 100%;
+  }
+
+  /* 3. Connected 4-Step Timeline Column */
+  .steps-panel {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1.5px solid #E2E8F0;
+    border-radius: 14px;
+    padding: clamp(10px, 1.4vh, 16px) clamp(12px, 1.4vw, 18px);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 0;
+  }
+  .section-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: clamp(8px, 1.1vh, 12px);
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: clamp(0.86rem, 1.15vw, 1.04rem);
+    font-weight: 900;
+    color: #991B1B;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::before {
+    content: "";
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: #DC2626;
+    flex-shrink: 0;
+  }
+  .section-sub {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .timeline {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: clamp(7px, 1.1vh, 12px);
+    padding-left: 34px;
+    flex: 1 1 auto;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 14px;
+    top: 18px;
+    bottom: 18px;
+    width: 4px;
+    background: linear-gradient(180deg, #DC2626 0%, #991B1B 50%, #0F172A 100%);
+    border-radius: 999px;
+  }
+  .step-item {
+    position: relative;
+    background: #FFFFFF;
+    border: 1.2px solid #E2E8F0;
+    border-left: 4px solid #DC2626;
+    border-radius: 10px;
+    padding: clamp(7px, 1vh, 11px) clamp(10px, 1vw, 14px);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+    flex: 1 1 auto;
+  }
+  .step-item.step-2 { border-left-color: #B91C1C; }
+  .step-item.step-3 { border-left-color: #1E293B; }
+  .step-item.step-4 {
+    border-left-color: #D97706;
+    background: #FFFBEB;
+    border-color: #FDE68A;
+    border-left-width: 4px;
+  }
+  .step-num {
+    position: absolute;
+    left: -34px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #DC2626;
+    color: #FFFFFF;
+    font-size: 0.88rem;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2.5px solid #FFFFFF;
+    box-shadow: 0 2px 8px rgba(185, 28, 28, 0.35);
+  }
+  .step-item.step-2 .step-num { background: #991B1B; }
+  .step-item.step-3 .step-num { background: #0F172A; }
+  .step-item.step-4 .step-num { background: #D97706; }
+
+  .step-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-item.step-3 .step-icon { background: #F1F5F9; border-color: #CBD5E1; }
+  .step-item.step-4 .step-icon { background: #FEF3C7; border-color: #FCD34D; }
+
+  .step-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .step-title {
+    font-size: clamp(0.82rem, 1.05vw, 0.96rem);
+    font-weight: 800;
+    color: #0F172A;
+    margin-bottom: 2px;
+    line-height: 1.2;
+  }
+  .step-desc {
+    font-size: clamp(0.72rem, 0.9vw, 0.82rem);
+    color: #334155;
+    line-height: 1.35;
+  }
+  .step-desc strong {
+    color: #0F172A;
+    font-weight: 800;
+  }
+  .ui-chip {
+    display: inline-block;
+    background: #FEE2E2;
+    color: #991B1B;
+    border: 1px solid #FCA5A5;
+    border-radius: 5px;
+    padding: 0 5px;
+    font-size: 0.74rem;
+    font-weight: 800;
+  }
+  .stat-badge {
+    display: inline-block;
+    background: #991B1B;
+    color: #FFFFFF;
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 0.74rem;
+    font-weight: 800;
+  }
+
+  .both-hidden-card {
+    background: #FFFFFF;
+    border: 1.5px dashed #CBD5E1;
+    border-radius: 14px;
+    padding: 28px 20px;
+    text-align: center;
+    color: #475569;
+    font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  .announcement-box-proj {
-    background: rgba(10, 57, 129, 0.85);
-    border: 2px solid var(--aclc-gold);
-    border-radius: 12px;
-    color: #FFFFFF;
+
+  /* 4. Footer Bar */
+  .proj-footer {
+    max-width: 1520px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 4px clamp(14px, 2vw, 28px) clamp(8px, 1vh, 12px) clamp(14px, 2vw, 28px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.74rem;
+    color: #64748B;
+    font-weight: 700;
+    flex-shrink: 0;
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page page-center py-4">
-  <div class="container text-center">
-    
-    <!-- Header -->
-    <div class="mb-3">
-      <div class="d-inline-flex align-items-center flex-wrap justify-content-center gap-2 mb-2">
-        <img src="/static/img/aclc-logo.png" alt="ACLC" width="54" height="54" class="rounded-circle shadow border border-2 border-warning">
-        <span class="badge bg-warning text-dark fs-3 px-3 py-1 fw-bold">ACLC COLLEGE OF MANDAUE</span>
-        <span class="badge bg-hiv-crimson text-white fs-3 px-3 py-1 fw-bold">TOPIC: HIV AWARENESS</span>
-        <span id="projEvalBadge" class="badge {% if eval_open %}bg-green text-white{% else %}bg-secondary text-white{% endif %} fs-3 px-3 py-1 fw-bold">
+<div class="proj-shell">
+  <!-- Subtle HIV Virion & RNA Strand Background Watermark -->
+  <div class="proj-bg-art" aria-hidden="true">
+    <svg viewBox="0 0 1440 810" preserveAspectRatio="xMidYMid slice" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Sweeping Double RNA/DNA Helix Strands -->
+      <path d="M-60 640 C 180 510, 340 760, 580 620 C 820 480, 980 730, 1220 590 C 1340 520, 1430 560, 1500 520" stroke="#B91C1C" stroke-opacity="0.075" stroke-width="5" stroke-linecap="round"/>
+      <path d="M-60 590 C 180 720, 340 470, 580 610 C 820 750, 980 500, 1220 640 C 1340 710, 1430 660, 1500 690" stroke="#0F172A" stroke-opacity="0.06" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 10"/>
+      <!-- Helix Base-Pair Rungs -->
+      <g stroke="#B91C1C" stroke-opacity="0.06" stroke-width="2.5" stroke-linecap="round">
+        <line x1="90" y1="590" x2="90" y2="635"/>
+        <line x1="210" y1="565" x2="210" y2="670"/>
+        <line x1="340" y1="540" x2="340" y2="685"/>
+        <line x1="460" y1="565" x2="460" y2="655"/>
+        <line x1="700" y1="555" x2="700" y2="675"/>
+        <line x1="830" y1="535" x2="830" y2="680"/>
+        <line x1="960" y1="550" x2="960" y2="665"/>
+        <line x1="1100" y1="570" x2="1100" y2="650"/>
+        <line x1="1260" y1="575" x2="1260" y2="650"/>
+      </g>
+
+      <!-- Stylized Virion / Capsid (Bottom Left) -->
+      <g transform="translate(120, 670)" stroke="#B91C1C" stroke-opacity="0.08" stroke-width="3">
+        <circle cx="0" cy="0" r="105" stroke-dasharray="12 8"/>
+        <circle cx="0" cy="0" r="78"/>
+        <polygon points="0,-46 36,-16 22,38 -22,38 -36,-16" fill="#B91C1C" fill-opacity="0.035"/>
+        <!-- Envelope Spikes -->
+        <g stroke-width="3" stroke-linecap="round">
+          <line x1="0" y1="-105" x2="0" y2="-130"/><circle cx="0" cy="-136" r="6" fill="#B91C1C" fill-opacity="0.07"/>
+          <line x1="74" y1="-74" x2="92" y2="-92"/><circle cx="96" cy="-96" r="6" fill="#B91C1C" fill-opacity="0.07"/>
+          <line x1="105" y1="0" x2="130" y2="0"/><circle cx="136" cy="0" r="6" fill="#B91C1C" fill-opacity="0.07"/>
+          <line x1="74" y1="74" x2="92" y2="92"/><circle cx="96" cy="96" r="6" fill="#B91C1C" fill-opacity="0.07"/>
+          <line x1="-74" y1="-74" x2="-92" y2="-92"/><circle cx="-96" cy="-96" r="6" fill="#B91C1C" fill-opacity="0.07"/>
+          <line x1="-105" y1="0" x2="-130" y2="0"/><circle cx="-136" cy="0" r="6" fill="#B91C1C" fill-opacity="0.07"/>
+        </g>
+      </g>
+
+      <!-- Stylized Virion / Capsid (Top Right Body) -->
+      <g transform="translate(1340, 260)" stroke="#0F172A" stroke-opacity="0.065" stroke-width="2.8">
+        <circle cx="0" cy="0" r="120" stroke-dasharray="14 9"/>
+        <circle cx="0" cy="0" r="88"/>
+        <polygon points="0,-52 40,-18 24,44 -24,44 -40,-18" fill="#0F172A" fill-opacity="0.025"/>
+        <g stroke-width="2.8" stroke-linecap="round">
+          <line x1="0" y1="-120" x2="0" y2="-146"/><circle cx="0" cy="-152" r="6" fill="#0F172A" fill-opacity="0.06"/>
+          <line x1="-85" y1="-85" x2="-104" y2="-104"/><circle cx="-109" cy="-109" r="6" fill="#0F172A" fill-opacity="0.06"/>
+          <line x1="-120" y1="0" x2="-146" y2="0"/><circle cx="-152" cy="0" r="6" fill="#0F172A" fill-opacity="0.06"/>
+          <line x1="-85" y1="85" x2="-104" y2="104"/><circle cx="-109" cy="109" r="6" fill="#0F172A" fill-opacity="0.06"/>
+          <line x1="0" y1="120" x2="0" y2="146"/><circle cx="0" cy="152" r="6" fill="#0F172A" fill-opacity="0.06"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <!-- 1. Cinematic Infographic Header -->
+  <header class="proj-hero">
+    <div class="proj-hero-inner">
+      <div class="proj-hero-left">
+        <div class="logos-group">
+          <div class="logo-badge"><img src="/static/img/aclc-logo.png" alt="ACLC"></div>
+          <div class="logo-badge"><img src="/static/img/guidance-logo.png" alt="Guidance Office"></div>
+          <div class="logo-badge"><img src="/static/img/aclcert-logo.png" alt="ACLCERT"></div>
+        </div>
+        <div class="proj-title-block">
+          <h1 id="projTitle">{{ event_title }}</h1>
+          <div class="proj-tagline">&ldquo;KNOWLEDGE IS POWER, PREVENTION IS PROTECTION&rdquo;</div>
+          <div class="proj-status-line" id="projStatusLine">
+            {% if status == 'Time In' %}
+              Time In is open &middot; Connect to Wi-Fi and scan QR to record attendance
+            {% elif status == 'Time Out' %}
+              Time Out is open &middot; Present your pass at the exit scanner &amp; complete the Seminar Evaluation Form
+            {% else %}
+              Attendance is currently closed
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="proj-hero-right">
+        <span class="meta-chip">ACLC COLLEGE OF MANDAUE</span>
+        <span id="projEvalBadge" class="meta-chip {% if eval_open %}eval-open{% else %}eval-closed{% endif %}">
           {% if eval_open %}EVALUATION: OPEN{% else %}EVALUATION: CLOSED{% endif %}
         </span>
-        <span id="projClock" class="badge bg-dark text-white fs-3 px-3 py-1 font-monospace">00:00:00</span>
-      </div>
-      <h1 class="display-4 fw-bold text-white mb-1" id="projTitle">{{ event_title }}</h1>
-      <div class="fs-2 fw-bold text-warning" id="projStatusLine">
-        {% if status == 'Time In' %}
-          Time In is open &middot; Connect to Wi-Fi and scan QR to record attendance
-        {% elif status == 'Time Out' %}
-          Time Out is open &middot; Present your pass at the exit scanner &amp; complete the Seminar Evaluation Form
-        {% else %}
-          Attendance is currently closed
-        {% endif %}
-      </div>
-      <div class="proj-subtext fs-4 mt-1">
-        Certificate Eligibility: <strong class="text-white" id="projMinDurLabel">{{ min_duration_label }}</strong> Attendance + <strong class="text-warning">Seminar Evaluation Form</strong>
-      </div>
-    </div>
-
-    <!-- Announcement Banner -->
-    <div class="row justify-content-center mb-3 {% if not proj_announcement %}d-none{% endif %}" id="projAnnouncementRow">
-      <div class="col-lg-10">
-        <div class="announcement-box-proj py-2 px-4 fs-3 fw-bold">
-          <span id="projAnnouncementText">{{ proj_announcement }}</span>
+        <div class="proj-clock-box">
+          <span class="proj-clock-label">Local Time</span>
+          <span id="projClock" class="proj-clock-time font-monospace">00:00:00</span>
+        </div>
+        <div class="ribbon-pill">
+          <div class="ribbon-pill-text">
+            <div class="top">HIV Awareness Month</div>
+            <div class="sub">LIVE STUDENT GUIDE</div>
+          </div>
+          <svg width="20" height="25" viewBox="0 0 26 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M13 2C9.2 2 6.5 4.8 6.5 8.5C6.5 11.4 8.4 14.3 11.4 18.2L5.2 28.5L9.4 30.2L14 21.8L18.6 30.2L22.8 28.5L16.6 18.2C19.6 14.3 21.5 11.4 21.5 8.5C21.5 4.8 16.8 2 13 2ZM13 5.8C14.8 5.8 16.2 7 16.2 8.8C16.2 10.6 14.9 12.7 13 15.2C11.1 12.7 9.8 10.6 9.8 8.8C9.8 7 11.2 5.8 13 5.8Z" fill="#FFFFFF"/>
+            <path d="M13 2C16.8 2 21.5 4.8 21.5 8.5C21.5 11.4 19.6 14.3 16.6 18.2L22.8 28.5L18.6 30.2L13 19.8" fill="#FECACA" fill-opacity="0.85"/>
+          </svg>
         </div>
       </div>
     </div>
+  </header>
 
-    <!-- QR Code Display (Side-by-Side or Centered) -->
-    <div class="row justify-content-center align-items-stretch g-4 my-2" id="qrDisplayRow">
-      
-      <!-- Step 1: Wi-Fi Auto-Connect QR Card -->
-      <div class="col-auto text-center d-flex {% if not proj_show_wifi_qr %}d-none{% endif %}" id="colWifiQr">
-        <div class="qr-card-box d-flex flex-column w-100">
-          <div class="flex-grow-1 d-flex flex-column justify-content-start">
-            <div>
-              <span class="badge bg-warning text-dark fs-3 px-3 py-1 fw-bold mb-2 d-inline-block border border-dark">
-                STEP 1: CONNECT TO WI-FI
-              </span>
-            </div>
-            <div class="mb-2 proj-subpill-slot {% if wifi_ssids|length <= 1 %}d-none{% endif %}" id="wifiApRotationRow">
-              <span class="badge bg-success text-white px-2 py-1 fw-bold" id="wifiApRotationBadge">
-                AP 1 of {{ wifi_ssids|length }} &middot; Front Rows
-              </span>
-            </div>
-            <div class="qr-frame mx-auto mb-2 d-block">
-              <img id="wifiQrImage" src="/api/qr/wifi?ap=1" alt="Wi-Fi QR Code" width="240" height="240" class="img-fluid rounded">
-            </div>
-            <div class="text-white fw-bold fs-2" id="wifiSsidLabel">
-              {{ wifi_ssids[0] }}
-            </div>
-            <div class="proj-subtext fs-5 fw-bold mb-2" id="wifiPassLabel">
-              {% if wifi_password %}Password: <span class="font-monospace text-warning fw-bold">{{ wifi_password }}</span>{% else %}Open Network (No Password){% endif %}
-            </div>
-            <div id="wifiMultiApList" class="d-flex flex-column gap-2 my-2 {% if wifi_ssids|length <= 1 %}d-none{% endif %}">
-              {% set row_labels = ['Front Rows', 'Middle Rows', 'Back Rows'] %}
-              {% for ap_ssid in wifi_ssids %}
-              <button type="button" class="proj-ap-pill {% if loop.first %}is-active{% endif %}" data-ap-index="{{ loop.index0 }}">
-                <span>
-                  {{ row_labels[loop.index0] if loop.index0 < 3 else 'Zone ' ~ loop.index }}
-                  {% if loop.first %}<span class="badge bg-success text-white ms-1">ACTIVE QR</span>{% endif %}
-                </span>
-                <span class="font-monospace fw-bold text-white">{{ ap_ssid }}</span>
-              </button>
-              {% endfor %}
-            </div>
+  <!-- Live Announcement Banner -->
+  <div class="proj-announcement-wrap {% if not proj_announcement %}d-none{% endif %}" id="projAnnouncementRow">
+    <div class="proj-announcement-box">
+      <span id="projAnnouncementText">{{ proj_announcement }}</span>
+    </div>
+  </div>
+
+  <!-- 2. Main Infographic Workspace -->
+  <main class="proj-main">
+    <div class="proj-grid {% if (proj_show_wifi_qr and not proj_show_form_qr) or (proj_show_form_qr and not proj_show_wifi_qr) %}single-qr{% elif not proj_show_wifi_qr and not proj_show_form_qr %}no-qr{% endif %}" id="qrDisplayRow">
+
+      <!-- Card 1: Wi-Fi Auto-Connect QR -->
+      <div class="qr-card {% if not proj_show_wifi_qr %}d-none{% endif %}" id="colWifiQr">
+        <div class="qr-card-hdr wifi">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+          <span>STEP 1: CONNECT TO WI-FI</span>
+        </div>
+        <div class="qr-card-body">
+          <div class="proj-subpill-slot {% if wifi_ssids|length <= 1 %}d-none{% endif %}" id="wifiApRotationRow">
+            <span class="ap-rot-badge" id="wifiApRotationBadge">
+              AP 1 of {{ wifi_ssids|length }} &middot; Front Rows
+            </span>
           </div>
-          <div class="proj-subtext small fw-bold mt-auto pt-2 border-top border-light border-opacity-25">
-            No scanner? Open Wi-Fi settings and connect manually.
+          <div class="qr-frame">
+            <img id="wifiQrImage" src="/api/qr/wifi?ap=1" alt="Wi-Fi QR Code">
+          </div>
+          <div class="qr-ssid-main" id="wifiSsidLabel">{{ wifi_ssids[0] }}</div>
+          <div id="wifiMultiApList" class="proj-ap-list {% if wifi_ssids|length <= 1 %}d-none{% endif %}">
+            {% set row_labels = ['Front Rows', 'Middle Rows', 'Back Rows'] %}
+            {% for ap_ssid in wifi_ssids %}
+            <button type="button" class="proj-ap-pill {% if loop.first %}is-active{% endif %}" data-ap-index="{{ loop.index0 }}">
+              <span>
+                {{ row_labels[loop.index0] if loop.index0 < 3 else 'Zone ' ~ loop.index }}{% if loop.first %}<span class="ap-active-tag">ACTIVE QR</span>{% endif %}
+              </span>
+              <span class="ap-ssid-txt">{{ ap_ssid }}</span>
+            </button>
+            {% endfor %}
+          </div>
+          <div id="wifiPassLabel" class="status-pill {% if wifi_password %}pwd{% else %}open{% endif %}">
+            {% if wifi_password %}PASSWORD: <span class="font-monospace">{{ wifi_password }}</span>{% else %}OPEN NETWORK &bull; NO PASSWORD{% endif %}
+          </div>
+          <div class="qr-tip">
+            If prompted &ldquo;No Internet&rdquo;, tap <strong>Stay Connected</strong>.
           </div>
         </div>
       </div>
 
-      <!-- Step 2: Student Page QR Card -->
-      <div class="col-auto text-center d-flex {% if not proj_show_form_qr %}d-none{% endif %}" id="colFormQr">
-        <div class="qr-card-box d-flex flex-column w-100">
-          <div class="flex-grow-1 d-flex flex-column justify-content-start">
-            <div>
-              <span class="badge bg-hiv-crimson text-white fs-3 px-3 py-1 fw-bold mb-2 d-inline-block border border-light">
-                STEP 2: ATTENDANCE &amp; QUIZ
-              </span>
-            </div>
-            <div class="mb-2 proj-subpill-slot {% if wifi_ssids|length <= 1 %}d-none{% endif %}" id="formPortalSubRow">
-              <span class="badge bg-azure text-white px-2 py-1 fw-bold">
-                AFTER WI-FI CONNECTION &middot; LOCAL PORTAL
-              </span>
-            </div>
-            <div class="qr-frame mx-auto mb-2 d-block">
-              <img id="formQrImage" src="/api/qr" alt="Student Page QR Code" width="240" height="240" class="img-fluid rounded">
-            </div>
-            <div class="text-white fw-bold fs-3 mb-2">
-              Scan or Type Address Below
-            </div>
-            <div class="my-auto py-2">
-              <div class="proj-ip-pill font-monospace" id="formUrlLabel">
-                {{ display_url }}
-              </div>
-            </div>
+      <!-- Card 2: Student Portal QR -->
+      <div class="qr-card portal {% if not proj_show_form_qr %}d-none{% endif %}" id="colFormQr">
+        <div class="qr-card-hdr portal">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span>STEP 2: ATTENDANCE &amp; QUIZ</span>
+        </div>
+        <div class="qr-card-body">
+          <div class="proj-subpill-slot {% if wifi_ssids|length <= 1 %}d-none{% endif %}" id="formPortalSubRow">
+            <span class="portal-sub-badge">AFTER WI-FI CONNECTION &middot; LOCAL PORTAL</span>
           </div>
-          <div class="proj-subtext small fw-bold mt-auto pt-2 border-top border-light border-opacity-25">
-            No QR scanner? Open Chrome or Safari and type this address (no https:// needed).
+          <div class="qr-frame">
+            <img id="formQrImage" src="/api/qr" alt="Student Page QR Code">
+          </div>
+          <div class="qr-label-muted">Or open Chrome / Safari and type this link:</div>
+          <div class="url-box" id="formUrlLabel">{{ display_url }}</div>
+          <div class="offline-pill">WORKS 100% OFFLINE &bull; NO DATA NEEDED</div>
+          <div class="qr-tip">
+            No <strong>https://</strong> needed. Keep the browser tab open.
           </div>
         </div>
       </div>
 
-      <!-- Notice when both are hidden -->
-      <div class="col-12 text-center proj-subtext py-4 {% if proj_show_form_qr or proj_show_wifi_qr %}d-none{% endif %}" id="bothHiddenNotice">
+      <!-- Notice when both QR cards are hidden -->
+      <div class="both-hidden-card {% if proj_show_form_qr or proj_show_wifi_qr %}d-none{% endif %}" id="bothHiddenNotice">
         <em>QR codes are currently hidden by the organizer.</em>
       </div>
 
-    </div>
+      <!-- Column 3: Connected 4-Step Timeline -->
+      <section class="steps-panel">
+        <div class="section-hdr">
+          <div class="section-title">How It Works &mdash; 4 Easy Steps</div>
+          <div class="section-sub">Follow In Order</div>
+        </div>
 
-    <!-- Attribution Footer -->
-    <div class="proj-subtext small mt-4 fw-bold">
-      Prepared by: CS31A
-    </div>
+        <div class="timeline">
+          <div class="step-item step-1">
+            <div class="step-num">1</div>
+            <div class="step-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><path d="M9 8h6M9 12h4"/>
+              </svg>
+            </div>
+            <div class="step-content">
+              <div class="step-title">Time In &amp; Save Your QR Pass</div>
+              <div class="step-desc">
+                <strong>Open</strong> <span class="js-inline-url">{{ display_url }}</span> &rarr; <strong>Enter</strong> Student ID, Name, Course/Strand &amp; Email &rarr; <strong>Tap</strong> <span class="ui-chip">Submit Time In</span> &rarr; <strong>Screenshot</strong> your QR Pass.
+              </div>
+            </div>
+          </div>
 
-  </div>
+          <div class="step-item step-2">
+            <div class="step-num">2</div>
+            <div class="step-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#991B1B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9 10l2 2 4-4"/>
+              </svg>
+            </div>
+            <div class="step-content">
+              <div class="step-title">Take Evaluation (When Announced)</div>
+              <div class="step-desc">
+                <strong>Open</strong> the link &rarr; <strong>Click</strong> <span class="ui-chip">My Passes</span> &rarr; Under your QR Pass, <strong>tap</strong> <span class="ui-chip">Take Seminar Evaluation</span> &rarr; <strong>Submit</strong>.
+              </div>
+            </div>
+          </div>
+
+          <div class="step-item step-3">
+            <div class="step-num">3</div>
+            <div class="step-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F172A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/>
+              </svg>
+            </div>
+            <div class="step-content">
+              <div class="step-title">Time Out at the Exit Scanner</div>
+              <div class="step-desc">
+                Before leaving, <strong>open</strong> <span class="ui-chip">My Passes</span> (or show your saved QR screenshot) so an officer can <strong>scan</strong> your Time Out.
+              </div>
+            </div>
+          </div>
+
+          <div class="step-item step-4">
+            <div class="step-num">4</div>
+            <div class="step-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
+              </svg>
+            </div>
+            <div class="step-content">
+              <div class="step-title">Earn Your Certificate of Participation</div>
+              <div class="step-desc">
+                Complete <span class="stat-badge" id="projMinDurLabel">{{ min_duration_label }}</span> of active attendance <strong>+</strong> submit the <strong>Evaluation Form</strong> to qualify.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- 3. Footer Meta -->
+  <footer class="proj-footer">
+    <span>ACLC College of Mandaue &bull; Guidance Office &bull; Mandaue City Health Office</span>
+    <span>Prepared by: CS31A</span>
+    <span>Static Portal: <span class="js-inline-url">{{ display_url }}</span></span>
+  </footer>
 </div>
 {% endblock %}
 
@@ -226,7 +963,8 @@
 document.addEventListener("DOMContentLoaded", function() {
   function updateClock() {
     const now = new Date();
-    document.getElementById("projClock").textContent = now.toLocaleTimeString();
+    const clockEl = document.getElementById("projClock");
+    if (clockEl) clockEl.textContent = now.toLocaleTimeString();
   }
   setInterval(updateClock, 1000);
   updateClock();
@@ -239,6 +977,17 @@ document.addEventListener("DOMContentLoaded", function() {
 
   function stripHttpScheme(raw) {
     return String(raw || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "").replace(/:80$/, "");
+  }
+
+  function updateGridLayoutClass(showWifi, showForm) {
+    const grid = document.getElementById("qrDisplayRow");
+    if (!grid) return;
+    grid.classList.remove("single-qr", "no-qr");
+    if (!showWifi && !showForm) {
+      grid.classList.add("no-qr");
+    } else if (showWifi !== showForm) {
+      grid.classList.add("single-qr");
+    }
   }
 
   function renderActiveApUI() {
@@ -274,12 +1023,12 @@ document.addEventListener("DOMContentLoaded", function() {
           left.textContent = rowLabels[i] || `Zone ${i + 1}`;
           if (isAct) {
             const actBadge = document.createElement("span");
-            actBadge.className = "badge bg-success text-white ms-1";
+            actBadge.className = "ap-active-tag";
             actBadge.textContent = "ACTIVE QR";
             left.appendChild(actBadge);
           }
           const right = document.createElement("span");
-          right.className = "font-monospace fw-bold text-white";
+          right.className = "ap-ssid-txt";
           right.textContent = ssid;
           pill.appendChild(left);
           pill.appendChild(right);
@@ -299,7 +1048,6 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   }
 
-  // Bind initial server-rendered AP pills so they are clickable immediately
   document.querySelectorAll("#wifiMultiApList .proj-ap-pill").forEach((pill, i) => {
     pill.addEventListener("click", function() {
       if (activeApIdx !== i) {
@@ -335,10 +1083,10 @@ document.addEventListener("DOMContentLoaded", function() {
       if (evalBadgeEl) {
         if (data.eval_open) {
           evalBadgeEl.textContent = "EVALUATION: OPEN";
-          evalBadgeEl.className = "badge bg-green text-white fs-3 px-3 py-1 fw-bold";
+          evalBadgeEl.className = "meta-chip eval-open";
         } else {
           evalBadgeEl.textContent = "EVALUATION: CLOSED";
-          evalBadgeEl.className = "badge bg-secondary text-white fs-3 px-3 py-1 fw-bold";
+          evalBadgeEl.className = "meta-chip eval-closed";
         }
       }
 
@@ -361,30 +1109,24 @@ document.addEventListener("DOMContentLoaded", function() {
         }
       }
 
-      if (colWifi) {
-        if (data.proj_show_wifi_qr) colWifi.classList.remove("d-none");
-        else colWifi.classList.add("d-none");
-      }
-
-      if (colForm) {
-        if (data.proj_show_form_qr) colForm.classList.remove("d-none");
-        else colForm.classList.add("d-none");
-      }
-
-      if (bothHidden) {
-        if (!data.proj_show_wifi_qr && !data.proj_show_form_qr) bothHidden.classList.remove("d-none");
-        else bothHidden.classList.add("d-none");
-      }
+      const showWifi = Boolean(data.proj_show_wifi_qr);
+      const showForm = Boolean(data.proj_show_form_qr);
+      if (colWifi) colWifi.classList.toggle("d-none", !showWifi);
+      if (colForm) colForm.classList.toggle("d-none", !showForm);
+      if (bothHidden) bothHidden.classList.toggle("d-none", showWifi || showForm);
+      updateGridLayoutClass(showWifi, showForm);
 
       if (wifiPassLabel) {
         if (data.wifi_password) {
-          wifiPassLabel.textContent = "Password: ";
+          wifiPassLabel.className = "status-pill pwd";
+          wifiPassLabel.textContent = "PASSWORD: ";
           const span = document.createElement("span");
-          span.className = "font-monospace text-warning fw-bold";
+          span.className = "font-monospace";
           span.textContent = data.wifi_password;
           wifiPassLabel.appendChild(span);
         } else {
-          wifiPassLabel.textContent = "Open Network (No Password)";
+          wifiPassLabel.className = "status-pill open";
+          wifiPassLabel.textContent = "OPEN NETWORK \u2022 NO PASSWORD";
         }
       }
 
@@ -400,7 +1142,11 @@ document.addEventListener("DOMContentLoaded", function() {
       }
 
       const curFormUrl = data.kiosk_url || data.base_url;
-      if (formUrlLabel) formUrlLabel.textContent = data.display_url || stripHttpScheme(curFormUrl);
+      const nextDisplayUrl = data.display_url || stripHttpScheme(curFormUrl);
+      if (formUrlLabel) formUrlLabel.textContent = nextDisplayUrl;
+      document.querySelectorAll(".js-inline-url").forEach((el) => {
+        el.textContent = nextDisplayUrl;
+      });
       if (curFormUrl !== lastFormUrl) {
         lastFormUrl = curFormUrl;
         if (formQrImage) formQrImage.src = "/api/qr?t=" + Date.now();

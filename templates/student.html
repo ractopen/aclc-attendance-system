@@ -377,17 +377,17 @@
           <div class="row g-3 mb-2">
             <div class="col-md-6 col-12">
               <label class="form-label required">Last Name</label>
-              <input type="text" class="form-control" id="last_name" name="last_name" placeholder="e.g. Dela Cruz" maxlength="100" required autofocus>
+              <input type="text" class="form-control" id="last_name" name="last_name" placeholder="e.g. Dela Cruz" maxlength="100" autocapitalize="words" required autofocus>
             </div>
             <div class="col-md-6 col-12">
               <label class="form-label required">First Name</label>
-              <input type="text" class="form-control" id="first_name" name="first_name" placeholder="e.g. Juan" maxlength="100" required>
+              <input type="text" class="form-control" id="first_name" name="first_name" placeholder="e.g. Juan" maxlength="100" autocapitalize="words" required>
             </div>
           </div>
 
           <div class="mb-3">
             <label class="form-label">Middle Name <span class="text-muted fw-normal">(Optional)</span></label>
-            <input type="text" class="form-control" id="middle_name" name="middle_name" placeholder="Leave blank if none" maxlength="100">
+            <input type="text" class="form-control" id="middle_name" name="middle_name" placeholder="Leave blank if none" maxlength="100" autocapitalize="words">
           </div>
 
           <!-- Section (Editable with Predictive Suggestions) -->
@@ -455,7 +455,8 @@
           <div class="mb-3">
             <label class="form-label required">Email Address</label>
             <input type="email" class="form-control" id="email" name="email" placeholder="e.g. name@gmail.com" maxlength="120" required>
-            <small class="text-muted">Your certificate will be emailed here once duration (<span class="min-dur-text">{{ min_duration_label }}</span>) and evaluation are complete.</small>
+            <div id="emailSuggestions" class="d-none mt-2 d-flex flex-wrap gap-1"></div>
+            <small class="text-muted d-block mt-1">Your certificate will be emailed here once duration (<span class="min-dur-text">{{ min_duration_label }}</span>) and evaluation are complete.</small>
           </div>
 
           <!-- Optional Student ID / USN / LRN (Single clean input with non-intrusive autocomplete) -->
@@ -701,27 +702,31 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg">
       <div class="modal-header bg-aclc-blue text-white">
-        <h5 class="modal-title fw-bold">How Attendance &amp; Evaluation Works</h5>
+        <h5 class="modal-title fw-bold">Quick Guide (4 Steps)</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body p-4">
-        <div class="d-flex flex-column gap-3">
+      <div class="modal-body p-3 p-md-4">
+        <div class="d-flex flex-column gap-2">
           <div class="p-3 bg-light rounded border">
-            <div class="fw-bold text-aclc-blue mb-1">1. Time In (Add Your Info)</div>
-            <div class="small text-dark">Fill out the <strong>Time In Form</strong> with your details (ID number is optional) to generate your QR Pass.</div>
+            <div class="fw-bold text-aclc-blue mb-1">1. Time In &amp; Screenshot QR</div>
+            <div class="small text-dark">Fill out the <strong>Time In Form</strong> &rarr; tap <strong>Time In</strong> &rarr; <strong>screenshot your QR Pass</strong>.</div>
+          </div>
+          <div class="p-3 bg-warning-lt rounded border border-warning">
+            <div class="fw-bold text-dark mb-1">2. Share 1 Phone &amp; Disconnect Wi-Fi</div>
+            <div class="small text-dark">Register seatmates with <strong>Register Another Person</strong> on this same phone, then <strong>disconnect from Wi-Fi</strong> when done so others can join (50-device limit).</div>
           </div>
           <div class="p-3 bg-light rounded border">
-            <div class="fw-bold text-hiv-crimson mb-1">2. Wait for Evaluation to Open</div>
-            <div class="small text-dark">When you see <strong>Evaluation Form Open</strong>, go to <strong>My Passes</strong> and tap <strong>Take Seminar Evaluation</strong> on your pass.</div>
+            <div class="fw-bold text-hiv-crimson mb-1">3. Take Evaluation (When Announced)</div>
+            <div class="small text-dark">Reconnect to Wi-Fi &rarr; open <strong>My Passes</strong> &rarr; tap <strong>Take Seminar Evaluation</strong>.</div>
           </div>
           <div class="p-3 bg-light rounded border">
-            <div class="fw-bold text-success mb-1">3. Time Out</div>
-            <div class="small text-dark">When <strong>Time Out</strong> is active, open <strong>My Passes</strong> and show your QR code at the exit scanner.</div>
+            <div class="fw-bold text-success mb-1">4. Time Out at Exit</div>
+            <div class="small text-dark">Show your <strong>QR Pass</strong> (or screenshot) at the exit scanner. <em>No Wi-Fi needed.</em></div>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-aclc fw-bold w-100" data-bs-dismiss="modal">Got It</button>
+        <button type="button" id="btnDismissHowItWorks" class="btn btn-aclc fw-bold w-100" data-bs-dismiss="modal">Got It, Start Time In</button>
       </div>
     </div>
   </div>
@@ -1096,6 +1101,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
   let prevStudentIdVal = "";
   let idAutoFillSuppressed = false;
+  let justAutoAppendedSuffix = "";
 
   function updateIdTypeUI() {
     if (!lblId || !studentIdInputEl || !idTypeSelectEl) return;
@@ -1171,6 +1177,7 @@ document.addEventListener("DOMContentLoaded", function() {
   function resetStudentIdAutocomplete() {
     prevStudentIdVal = "";
     idAutoFillSuppressed = false;
+    justAutoAppendedSuffix = "";
     if (studentIdSuggestionsEl) {
       studentIdSuggestionsEl.classList.add("d-none");
       studentIdSuggestionsEl.innerHTML = "";
@@ -1191,13 +1198,22 @@ document.addEventListener("DOMContentLoaded", function() {
 
       if (upper === "") {
         idAutoFillSuppressed = false;
+        justAutoAppendedSuffix = "";
       } else if (isDeleting) {
+        if (justAutoAppendedSuffix && prevStudentIdVal.endsWith(justAutoAppendedSuffix) && upper === prevStudentIdVal.slice(0, -1)) {
+          nextVal = prevStudentIdVal.slice(0, -justAutoAppendedSuffix.length);
+        }
+        justAutoAppendedSuffix = "";
         idAutoFillSuppressed = true;
-      } else if (!idAutoFillSuppressed && !isPaste && atEnd) {
-        if (/^C\d{2}$/.test(upper) || /^C\d{2}-\d{2}$/.test(upper)) {
-          nextVal = upper + "-";
-        } else if (/^C\d{2}-\d{2}-\d{5}$/.test(upper)) {
-          nextVal = upper + "-MAN121";
+      } else {
+        justAutoAppendedSuffix = "";
+        if (!idAutoFillSuppressed && !isPaste && atEnd) {
+          if (/^C\d{2}$/.test(upper) || /^C\d{2}-\d{2}$/.test(upper)) {
+            nextVal = upper + "-";
+          } else if (/^C\d{2}-\d{2}-\d{5}$/.test(upper)) {
+            nextVal = upper + "-MAN121";
+            justAutoAppendedSuffix = "-MAN121";
+          }
         }
       }
 
@@ -1249,12 +1265,38 @@ document.addEventListener("DOMContentLoaded", function() {
       const yr = (document.getElementById("college_year") || {}).value || "";
       const cr = (document.getElementById("course") || {}).value || "";
       const parts = (hasSectionText || academicDetailsExpanded) ? [yr, cr].filter(Boolean) : [];
+      if (hasSectionText && !academicDetailsExpanded) {
+        if (yr && !cr) {
+          sectionDetectedChip.textContent = `Detected: ${yr} · Course not detected`;
+          if (btnToggleAcademicDetails) btnToggleAcademicDetails.textContent = "Pick Course";
+          return;
+        }
+        if (!yr && !cr) {
+          sectionDetectedChip.textContent = "Year/Course not detected";
+          if (btnToggleAcademicDetails) btnToggleAcademicDetails.textContent = "Pick Year/Course";
+          return;
+        }
+      }
       sectionDetectedChip.textContent = parts.length ? `Detected: ${parts.join(" · ")}` : "Year/Course will be auto-detected from your section.";
+      if (btnToggleAcademicDetails) btnToggleAcademicDetails.textContent = academicDetailsExpanded ? "Hide" : "Edit";
     } else {
       const gr = (document.getElementById("shs_grade") || {}).value || "";
       const st = (document.getElementById("strand") || {}).value || "";
       const parts = (hasSectionText || academicDetailsExpanded) ? [gr, st].filter(Boolean) : [];
+      if (hasSectionText && !academicDetailsExpanded) {
+        if (gr && !st) {
+          sectionDetectedChip.textContent = `Detected: ${gr} · Strand not detected`;
+          if (btnToggleAcademicDetails) btnToggleAcademicDetails.textContent = "Pick Strand";
+          return;
+        }
+        if (!gr && !st) {
+          sectionDetectedChip.textContent = "Grade/Strand not detected";
+          if (btnToggleAcademicDetails) btnToggleAcademicDetails.textContent = "Pick Grade/Strand";
+          return;
+        }
+      }
       sectionDetectedChip.textContent = parts.length ? `Detected: ${parts.join(" · ")}` : "Grade/Strand will be auto-detected from your section.";
+      if (btnToggleAcademicDetails) btnToggleAcademicDetails.textContent = academicDetailsExpanded ? "Hide" : "Edit";
     }
   }
 
@@ -1294,6 +1336,106 @@ document.addEventListener("DOMContentLoaded", function() {
       academicDetailsExpanded = !academicDetailsExpanded;
       this.textContent = academicDetailsExpanded ? "Hide" : "Edit";
       updateCategoryLabels();
+      if (academicDetailsExpanded) {
+        const targetIds = (radioCollege && radioCollege.checked)
+          ? ["course", "college_year"]
+          : ["strand", "shs_grade"];
+        const firstEmpty = targetIds.map(id => document.getElementById(id)).find(el => el && !el.value);
+        if (firstEmpty) firstEmpty.focus();
+      }
+    });
+  }
+
+  // Name Title-Case normalization on blur (only when all-lowercase or all-uppercase)
+  ["last_name", "first_name", "middle_name"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("blur", function() {
+      const val = (this.value || "").trim().replace(/\s+/g, " ");
+      if (!val) return;
+      if (val === val.toLowerCase() || val === val.toUpperCase()) {
+        this.value = val.toLowerCase().replace(/(?:^|\s|[-'])[a-z]/g, ch => ch.toUpperCase());
+      }
+    });
+  });
+
+  // Email quick-domain chips & common typo fix
+  const emailInputEl = document.getElementById("email");
+  const emailSuggestionsEl = document.getElementById("emailSuggestions");
+  const EMAIL_DOMAINS = ["gmail.com", "yahoo.com", "outlook.com"];
+  const EMAIL_DOMAIN_TYPOS = {
+    "gmial.com": "gmail.com",
+    "gamil.com": "gmail.com",
+    "gnail.com": "gmail.com",
+    "gmal.com": "gmail.com",
+    "gmail.con": "gmail.com",
+    "gmail.co": "gmail.com",
+    "yaho.com": "yahoo.com",
+    "yahoo.con": "yahoo.com",
+    "outlok.com": "outlook.com",
+    "hotmal.com": "hotmail.com"
+  };
+
+  function renderEmailSuggestions() {
+    if (!emailInputEl || !emailSuggestionsEl) return;
+    const raw = (emailInputEl.value || "").trim();
+    const atIdx = raw.indexOf("@");
+    const chips = [];
+
+    if (atIdx === -1) {
+      if (raw.length >= 2 && !/\s/.test(raw)) {
+        EMAIL_DOMAINS.forEach(dom => {
+          chips.push({ label: `@${dom}`, value: `${raw}@${dom}`, isTypo: false });
+        });
+      }
+    } else {
+      const local = raw.slice(0, atIdx);
+      const domPart = raw.slice(atIdx + 1).toLowerCase();
+      if (local) {
+        if (EMAIL_DOMAIN_TYPOS[domPart]) {
+          const fixed = EMAIL_DOMAIN_TYPOS[domPart];
+          chips.push({ label: `Did you mean @${fixed}?`, value: `${local}@${fixed}`, isTypo: true });
+        } else if (!EMAIL_DOMAINS.includes(domPart)) {
+          EMAIL_DOMAINS.filter(dom => !domPart || dom.startsWith(domPart)).forEach(dom => {
+            chips.push({ label: `@${dom}`, value: `${local}@${dom}`, isTypo: false });
+          });
+        }
+      }
+    }
+
+    if (chips.length === 0) {
+      emailSuggestionsEl.classList.add("d-none");
+      emailSuggestionsEl.innerHTML = "";
+      return;
+    }
+
+    emailSuggestionsEl.innerHTML = "";
+    chips.forEach(chip => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = chip.isTypo
+        ? "btn btn-sm btn-outline-warning py-1 px-2 fw-bold"
+        : "btn btn-sm btn-outline-primary py-1 px-2 fw-bold";
+      btn.style.fontSize = "0.78rem";
+      btn.textContent = chip.label;
+      btn.addEventListener("mousedown", function(e) {
+        e.preventDefault();
+        emailInputEl.value = chip.value;
+        emailSuggestionsEl.classList.add("d-none");
+        emailSuggestionsEl.innerHTML = "";
+      });
+      emailSuggestionsEl.appendChild(btn);
+    });
+    emailSuggestionsEl.classList.remove("d-none");
+  }
+
+  if (emailInputEl) {
+    emailInputEl.addEventListener("input", renderEmailSuggestions);
+    emailInputEl.addEventListener("focus", renderEmailSuggestions);
+    emailInputEl.addEventListener("blur", function() {
+      setTimeout(() => {
+        if (emailSuggestionsEl) emailSuggestionsEl.classList.add("d-none");
+      }, 150);
     });
   }
 
@@ -2572,10 +2714,30 @@ document.addEventListener("DOMContentLoaded", function() {
   }
 
   const btnHowItWorks = document.getElementById("btnHowItWorks");
+  const modalHowItWorksEl = document.getElementById("modalHowItWorks");
+  const GUIDE_SEEN_KEY = "aclc_how_it_works_seen_v1";
+
   if (btnHowItWorks) {
     btnHowItWorks.addEventListener("click", function() {
       window.openModalById("modalHowItWorks");
     });
+  }
+
+  if (modalHowItWorksEl) {
+    modalHowItWorksEl.addEventListener("hidden.bs.modal", function() {
+      try { localStorage.setItem(GUIDE_SEEN_KEY, "1"); } catch (e) {}
+    });
+    const btnDismissGuide = document.getElementById("btnDismissHowItWorks");
+    if (btnDismissGuide) {
+      btnDismissGuide.addEventListener("click", function() {
+        try { localStorage.setItem(GUIDE_SEEN_KEY, "1"); } catch (e) {}
+      });
+    }
+    let guideSeen = false;
+    try { guideSeen = localStorage.getItem(GUIDE_SEEN_KEY) === "1"; } catch (e) {}
+    if (!guideSeen) {
+      setTimeout(() => window.openModalById("modalHowItWorks"), 150);
+    }
   }
 
   // Connection status tracking & retry
