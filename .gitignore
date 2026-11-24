@@ -11,3 +11,5 @@ htmlcov/
 *.log
 .vscode/
 .idea/
+node_modules/
+.wrangler/

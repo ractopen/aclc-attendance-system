@@ -45,6 +45,12 @@ from certificate_service import (
     get_batch_status,
     get_quality_dashboard_data,
 )
+from print_fallback_service import (
+    generate_blank_attendance_pdf,
+    generate_blank_evaluation_pdf,
+    generate_filled_attendance_pdf,
+    generate_filled_evaluations_pdf,
+)
 import qrcode
 
 app = FastAPI(title="ACLC Seminar Attendance & Evaluation System")
@@ -1985,6 +1991,58 @@ def export_certificate_delivery_csv(request: Request):
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+# ==============================================================================
+# PRINTABLE PDF FALLBACK & REPORT ENDPOINTS
+# ==============================================================================
+
+@app.get("/api/print/attendance-sheet.pdf")
+def print_blank_attendance_sheet(request: Request, pages: int = 5, session: str = ""):
+    if not check_admin_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    pdf_bytes = generate_blank_attendance_pdf(pages=pages, session_label=session)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=ACLC_Printable_Attendance_Sheet.pdf"},
+    )
+
+
+@app.get("/api/print/evaluation-form.pdf")
+def print_blank_evaluation_form(request: Request):
+    if not check_admin_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    pdf_bytes = generate_blank_evaluation_pdf()
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=ACLC_Printable_Evaluation_Form.pdf"},
+    )
+
+
+@app.get("/api/print/attendance-records.pdf")
+def print_filled_attendance_records(request: Request):
+    if not check_admin_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    pdf_bytes = generate_filled_attendance_pdf()
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=ACLC_Attendance_Report_{datetime.now().strftime('%Y%m%d')}.pdf"},
+    )
+
+
+@app.get("/api/print/evaluation-answers.pdf")
+def print_filled_evaluation_answers(request: Request):
+    if not check_admin_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    pdf_bytes = generate_filled_evaluations_pdf()
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=ACLC_Evaluation_Answers_{datetime.now().strftime('%Y%m%d')}.pdf"},
     )
 
 

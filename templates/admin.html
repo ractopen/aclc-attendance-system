@@ -515,6 +515,38 @@
       </div>
       <div class="card-body p-4">
 
+        <!-- Printable PDFs & Reports -->
+        <div class="p-3 bg-light rounded border mb-4">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div>
+              <strong class="text-aclc-blue d-block">Printable PDFs &amp; Reports</strong>
+              <span class="text-muted small">Black-and-white ink-saver Attendance Sheet, Evaluation Form, and filled reports.</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <label class="small text-muted fw-bold mb-0" for="printSheetPages">Blank Sheet Pages:</label>
+              <select id="printSheetPages" class="form-select form-select-sm" style="width: auto;">
+                <option value="3">3 pages (60 rows)</option>
+                <option value="5" selected>5 pages (100 rows)</option>
+                <option value="10">10 pages (200 rows)</option>
+              </select>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" id="btnPrintBlankAttendance" class="btn btn-outline-primary btn-sm fw-bold">
+              Print Blank Attendance Sheet (PDF)
+            </button>
+            <a href="/api/print/evaluation-form.pdf" target="_blank" class="btn btn-outline-danger btn-sm fw-bold">
+              Print Blank Evaluation Form (PDF)
+            </a>
+            <a href="/api/print/attendance-records.pdf" target="_blank" class="btn btn-aclc btn-sm fw-bold">
+              Print Filled Attendance Report (PDF)
+            </a>
+            <a href="/api/print/evaluation-answers.pdf" target="_blank" class="btn btn-hiv btn-sm fw-bold">
+              Print Evaluation Answers &amp; Tally (PDF)
+            </a>
+          </div>
+        </div>
+
         <!-- 3-Step Certificate & Quality Workflow -->
         <div class="p-3 bg-light rounded border mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
           <div class="small">
@@ -2443,6 +2475,15 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // Live Feed Polling (Every 4 seconds)
   setInterval(refreshKpiStats, 4000);
+
+  // Printable Blank Attendance Sheet with selectable page count
+  const btnPrintBlankAttendance = document.getElementById("btnPrintBlankAttendance");
+  if (btnPrintBlankAttendance) {
+    btnPrintBlankAttendance.addEventListener("click", function() {
+      const pages = document.getElementById("printSheetPages")?.value || "5";
+      window.open(`/api/print/attendance-sheet.pdf?pages=${encodeURIComponent(pages)}`, "_blank");
+    });
+  }
 });
 </script>
 {% endblock %}
