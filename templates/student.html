@@ -292,6 +292,9 @@
     <div id="timeInSuccessAlert" class="alert alert-success d-none py-3 px-4 mb-3 text-center shadow-sm">
       <h3 class="text-success fw-bold mb-1">Time In Recorded</h3>
       <p class="mb-2 text-dark small" id="timeInSuccessMsg">Your attendance has been recorded. Keep your pass below for your Seminar Evaluation and Time Out.</p>
+      <div class="alert alert-warning text-dark small py-2 px-3 mb-2 text-start border-warning">
+        <strong>Please Disconnect from Event Wi-Fi Now:</strong> Screenshot or keep your QR Pass below, then turn off/disconnect from the event Wi-Fi so arriving classmates can connect. Reconnect only when Evaluation opens (no Wi-Fi is needed for Time Out scanning).
+      </div>
       <button type="button" id="btnRegisterAnother" class="btn btn-outline-success btn-sm fw-bold">
         Register Another Person / Classmate (Time In)
       </button>
@@ -1410,6 +1413,9 @@ document.addEventListener("DOMContentLoaded", function() {
           <button type="button" class="btn btn-success w-100 fw-bold mt-2" disabled>
             Evaluation Submitted &amp; Locked
           </button>
+          <div class="small text-warning-emphasis bg-warning-lt border border-warning rounded p-2 mt-2 text-start">
+            <strong>Online steps complete:</strong> Please disconnect from the event Wi-Fi so other students can connect. Keep or screenshot your QR pass for the exit scanner (no Wi-Fi needed).
+          </div>
         `;
       } else if (isEvalOpen) {
         const btnLabel = hasDraft ? `Resume Seminar Evaluation${progressTag || ' (Saved)'}` : "Take Seminar Evaluation";
@@ -1428,6 +1434,9 @@ document.addEventListener("DOMContentLoaded", function() {
           <button type="button" class="btn btn-outline-secondary w-100 fw-bold mt-2" disabled>
             Evaluation Closed (Opens in Lecture)
           </button>
+          <div class="small text-muted bg-light border rounded p-2 mt-2 text-start">
+            <strong>Free up Wi-Fi:</strong> You may disconnect from the event Wi-Fi now and reconnect only when Evaluation opens.
+          </div>
         `;
       }
 
@@ -2062,9 +2071,9 @@ document.addEventListener("DOMContentLoaded", function() {
         const live = livePassStatuses[submittedId] || {};
         let nextStepText = res.message || "Your Seminar Evaluation Form has been submitted and locked.";
         if (res.is_eligible) {
-          nextStepText = "Evaluation submitted and attendance requirement met. Your Certificate of Participation is APPROVED.";
+          nextStepText = "Evaluation submitted and attendance requirement met. Your Certificate of Participation is APPROVED. Please disconnect from the event Wi-Fi now so other students can connect.";
         } else if (!live.has_timeout) {
-          nextStepText = "Evaluation submitted and locked. Next step: present your QR pass at the exit scanner for Time Out after the seminar.";
+          nextStepText = "Evaluation submitted and locked. Please disconnect from the event Wi-Fi now so others can connect, and keep or screenshot your QR pass for Time Out at the exit scanner (no Wi-Fi needed).";
         }
         showEvaluationCompletedModal({
           title: res.status === "already_submitted" ? "Already Submitted" : "Evaluation Completed",
