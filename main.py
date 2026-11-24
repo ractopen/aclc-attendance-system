@@ -627,6 +627,7 @@ def kiosk_live(request: Request):
         "proj_show_wifi_qr": get_setting("proj_show_wifi_qr", "1") == "1",
         "proj_announcement": get_setting("proj_announcement", ""),
         "wifi_disconnect_prompt": get_setting("wifi_disconnect_prompt", "0") == "1",
+        "wifi_disconnect_prompt_v": int(float(get_setting("wifi_disconnect_prompt_v", "0") or "0")),
         "network": get_network_status_info()
     }
 
@@ -654,6 +655,7 @@ def student_page(request: Request):
             "venue": venue,
             "kiosk_announcement": kiosk_announcement,
             "wifi_disconnect_prompt": get_setting("wifi_disconnect_prompt", "0") == "1",
+            "wifi_disconnect_prompt_v": int(float(get_setting("wifi_disconnect_prompt_v", "0") or "0")),
             "terms_and_conditions": terms,
             "min_duration": int(float(min_dur)),
             "min_duration_label": format_duration_hm(min_dur),
@@ -1424,7 +1426,11 @@ def toggle_wifi_prompt(payload: dict, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     enabled = bool(payload.get("enabled", False))
     set_setting("wifi_disconnect_prompt", "1" if enabled else "0")
-    return {"status": "success", "wifi_disconnect_prompt": enabled}
+    prompt_v = int(float(get_setting("wifi_disconnect_prompt_v", "0") or "0"))
+    if enabled:
+        prompt_v += 1
+        set_setting("wifi_disconnect_prompt_v", str(prompt_v))
+    return {"status": "success", "wifi_disconnect_prompt": enabled, "wifi_disconnect_prompt_v": prompt_v}
 
 @app.post("/api/admin/set-kiosk-config")
 def set_kiosk_config(payload: KioskConfigPayload, request: Request):

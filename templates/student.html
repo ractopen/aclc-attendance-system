@@ -784,6 +784,32 @@
     </div>
   </div>
 </div>
+
+<!-- Modal: Admin-Triggered Wi-Fi Disconnect Notice -->
+<div class="modal modal-blur fade" id="wifiDisconnectModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content border-warning">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title fw-bold">Free Up Event Wi-Fi</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4 text-center">
+        <h4 class="fw-bold text-dark mb-2">Done for now? Please disconnect from Wi-Fi</h4>
+        <p class="text-dark mb-3">
+          If you already finished <strong>Time In</strong> or submitted your <strong>Evaluation Form</strong>, please <strong>disconnect or forget the event Wi-Fi</strong> on your phone so other students can connect.
+        </p>
+        <div class="alert alert-light border text-start small mb-0">
+          <strong>Important:</strong> Keep this tab open or screenshot your <strong>QR Pass</strong> first. <strong>No Wi-Fi is needed</strong> when scanning out for Time Out.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btnDismissWifiDisconnectModal" class="btn btn-warning text-dark w-100 fw-bold" data-bs-dismiss="modal">
+          Got It, I'll Disconnect
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -2551,6 +2577,9 @@ document.addEventListener("DOMContentLoaded", function() {
           wifiPromptBanner.classList.add("d-none");
         }
       }
+      if (typeof window.maybeShowWifiDisconnectModal === "function") {
+        window.maybeShowWifiDisconnectModal(Boolean(data.wifi_disconnect_prompt), Number(data.wifi_disconnect_prompt_v || 0));
+      }
 
       if (noticeBox && noticeText) {
         if (data.kiosk_announcement) {
@@ -2641,5 +2670,46 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   }
 });
+
+(function() {
+  const DISMISS_KEY = "aclc_wifi_prompt_dismissed_v";
+  let currentPromptVersion = {{ wifi_disconnect_prompt_v | default(0) }};
+
+  function markDismissed() {
+    try {
+      localStorage.setItem(DISMISS_KEY, String(currentPromptVersion));
+    } catch (e) {}
+  }
+
+  window.maybeShowWifiDisconnectModal = function(enabled, version) {
+    if (!enabled) return;
+    const v = Number(version || 0);
+    currentPromptVersion = v;
+    try {
+      if (localStorage.getItem(DISMISS_KEY) === String(v)) return;
+    } catch (e) {}
+    const evalModal = document.getElementById("modalSeminarEvaluation");
+    if (evalModal && evalModal.classList.contains("show")) return;
+    const modalEl = document.getElementById("wifiDisconnectModal");
+    if (!modalEl || modalEl.classList.contains("show")) return;
+    if (window.bootstrap && window.bootstrap.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+  };
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const modalEl = document.getElementById("wifiDisconnectModal");
+    if (modalEl) {
+      modalEl.addEventListener("hidden.bs.modal", markDismissed);
+    }
+    const btn = document.getElementById("btnDismissWifiDisconnectModal");
+    if (btn) {
+      btn.addEventListener("click", markDismissed);
+    }
+    {% if wifi_disconnect_prompt %}
+    window.maybeShowWifiDisconnectModal(true, {{ wifi_disconnect_prompt_v | default(0) }});
+    {% endif %}
+  });
+})();
 </script>
 {% endblock %}
