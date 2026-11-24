@@ -266,6 +266,11 @@
       <div><strong>Notice:</strong> <span id="announcementText">{{ kiosk_announcement }}</span></div>
     </div>
 
+    <!-- Admin-Triggered Wi-Fi Slot Notice -->
+    <div id="wifiDisconnectPromptBanner" class="alert alert-warning text-dark py-2 px-3 mb-3 small shadow-sm border-warning {% if not wifi_disconnect_prompt %}d-none{% endif %}">
+      <strong>Please Disconnect / Forget Event Wi-Fi When Done:</strong> If you already finished <strong>Time In</strong> or submitted your <strong>Evaluation Form</strong>, please disconnect or forget the event Wi-Fi so other students can connect. <em>(Keep or screenshot your QR Pass — no Wi-Fi is needed for Time Out.)</em>
+    </div>
+
     <!-- Unified Workspace Switcher (Time In vs My Passes) -->
     <div id="studentViewTabs" class="btn-group w-100 mb-3 shadow-sm {% if status != 'Time In' %}d-none{% endif %}" role="group" aria-label="Student view switcher">
       <button type="button" id="tabBtnTimeIn" class="btn btn-aclc fw-bold py-2">
@@ -2535,6 +2540,15 @@ document.addEventListener("DOMContentLoaded", function() {
           statusBadge.className = "badge bg-secondary text-white px-2 py-1 fw-bold";
         } else {
           statusBadge.className = "badge bg-green text-white px-2 py-1 fw-bold";
+        }
+      }
+
+      const wifiPromptBanner = document.getElementById("wifiDisconnectPromptBanner");
+      if (wifiPromptBanner) {
+        if (data.wifi_disconnect_prompt) {
+          wifiPromptBanner.classList.remove("d-none");
+        } else {
+          wifiPromptBanner.classList.add("d-none");
         }
       }
 

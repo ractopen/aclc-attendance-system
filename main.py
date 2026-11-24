@@ -626,6 +626,7 @@ def kiosk_live(request: Request):
         "proj_show_form_qr": get_setting("proj_show_form_qr", "1") == "1",
         "proj_show_wifi_qr": get_setting("proj_show_wifi_qr", "1") == "1",
         "proj_announcement": get_setting("proj_announcement", ""),
+        "wifi_disconnect_prompt": get_setting("wifi_disconnect_prompt", "0") == "1",
         "network": get_network_status_info()
     }
 
@@ -652,6 +653,7 @@ def student_page(request: Request):
             "active_session_label": f"{session} {status}",
             "venue": venue,
             "kiosk_announcement": kiosk_announcement,
+            "wifi_disconnect_prompt": get_setting("wifi_disconnect_prompt", "0") == "1",
             "terms_and_conditions": terms,
             "min_duration": int(float(min_dur)),
             "min_duration_label": format_duration_hm(min_dur),
@@ -786,6 +788,7 @@ def admin_page(request: Request, search: Optional[str] = None, level: Optional[s
             "event_date": settings.get("event_date", datetime.now().strftime("%B %d, %Y")),
             "venue": settings.get("venue", "ACLC College of Mandaue"),
             "kiosk_announcement": settings.get("kiosk_announcement", ""),
+            "wifi_disconnect_prompt": settings.get("wifi_disconnect_prompt", "0") == "1",
             "terms_and_conditions": settings.get("terms_and_conditions", ""),
             "current_phase": phase,
             "qr_mode": settings.get("qr_mode", "STATIC"),
@@ -1414,6 +1417,14 @@ def set_duration(payload: DurationPayload, request: Request):
     set_setting("min_duration_minutes", str(payload.minutes))
     recompute_all_attendees_eligibility(float(payload.minutes))
     return {"status": "success", "minutes": payload.minutes, "label": format_duration_hm(payload.minutes)}
+
+@app.post("/api/admin/toggle-wifi-prompt")
+def toggle_wifi_prompt(payload: dict, request: Request):
+    if not check_admin_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    enabled = bool(payload.get("enabled", False))
+    set_setting("wifi_disconnect_prompt", "1" if enabled else "0")
+    return {"status": "success", "wifi_disconnect_prompt": enabled}
 
 @app.post("/api/admin/set-kiosk-config")
 def set_kiosk_config(payload: KioskConfigPayload, request: Request):

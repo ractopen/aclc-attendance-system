@@ -245,6 +245,20 @@
             <small class="text-muted d-block mt-1">Required: <strong class="text-aclc-blue" id="minDurationHelperText">{{ min_duration_label }}</strong> + Evaluation</small>
           </div>
         </div>
+
+        <!-- Wi-Fi Slot Management Broadcast -->
+        <div class="mt-4 pt-3 border-top">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <label class="form-label fw-bold mb-0 text-dark">Wi-Fi Slot Notice (Ask Idle Students to Disconnect)</label>
+              <small class="text-muted d-block">Shows a clear banner on student phones asking anyone done with Time In or Evaluation to forget/disconnect from the event Wi-Fi so others can connect.</small>
+            </div>
+            <div class="btn-group" role="group">
+              <button type="button" id="btnWifiPromptOn" class="btn {% if wifi_disconnect_prompt %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Ask to Disconnect</button>
+              <button type="button" id="btnWifiPromptOff" class="btn {% if not wifi_disconnect_prompt %}btn-dark text-white fw-bold{% else %}btn-outline-secondary{% endif %}">Off</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     </div>
@@ -1381,6 +1395,36 @@ document.addEventListener("DOMContentLoaded", function() {
 
   if (btnEvalOpen) btnEvalOpen.addEventListener("click", () => setEvalAvailability(true));
   if (btnEvalClose) btnEvalClose.addEventListener("click", () => setEvalAvailability(false));
+
+  // Wi-Fi Disconnect Prompt Toggle
+  const btnWifiPromptOn = document.getElementById("btnWifiPromptOn");
+  const btnWifiPromptOff = document.getElementById("btnWifiPromptOff");
+
+  async function setWifiDisconnectPrompt(enabled) {
+    const resp = await fetch("/api/admin/toggle-wifi-prompt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: enabled })
+    });
+    if (checkAuthRedirect(resp)) return;
+    if (resp.ok) {
+      if (enabled) {
+        btnWifiPromptOn.className = "btn btn-warning text-dark fw-bold";
+        btnWifiPromptOff.className = "btn btn-outline-secondary";
+        showToast("Student phones now show a notice asking idle users to disconnect/forget the event Wi-Fi.", "warning");
+      } else {
+        btnWifiPromptOn.className = "btn btn-outline-secondary";
+        btnWifiPromptOff.className = "btn btn-dark text-white fw-bold";
+        showToast("Wi-Fi disconnect notice turned OFF.", "success");
+      }
+      refreshPreviewIframes();
+    } else {
+      showToast("Failed to update Wi-Fi slot notice.", "danger");
+    }
+  }
+
+  if (btnWifiPromptOn) btnWifiPromptOn.addEventListener("click", () => setWifiDisconnectPrompt(true));
+  if (btnWifiPromptOff) btnWifiPromptOff.addEventListener("click", () => setWifiDisconnectPrompt(false));
 
   // End-of-Day Tally & Finalize All Unsubmitted Drafts
   const btnTallyEvaluations = document.getElementById("btnTallyEvaluations");
