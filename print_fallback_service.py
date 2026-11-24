@@ -12,12 +12,21 @@ Generates four clean, print-ready A4 PDFs using ReportLab:
    and per-attendee responses.
 """
 
+import base64
 import io
 import json
+import os
+import re
+import shutil
+import subprocess
+import tempfile
 import unicodedata
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
+import qrcode
+from jinja2 import Environment, FileSystemLoader
+from reportlab.graphics.shapes import Drawing, Polygon, Rect
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4, landscape
@@ -31,6 +40,7 @@ from reportlab.platypus import (
     TableStyle,
     PageBreak,
     KeepTogether,
+    Image,
 )
 
 from database import (
@@ -719,6 +729,664 @@ def generate_filled_evaluations_pdf() -> bytes:
             elements.append(KeepTogether([card_tbl, Spacer(1, 2 * mm)]))
 
     footer_left = f"{event_title} | Evaluation Summary & Answers | Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    doc.build(
+        elements,
+        onFirstPage=lambda c, d: _draw_footer(c, d, footer_left),
+        onLaterPages=lambda c, d: _draw_footer(c, d, footer_left),
+    )
+    return buf.getvalue()
+
+
+def _make_qr_flowable(data: str, size_mm: float = 38.0, fill_color: str = "#000000") -> Image:
+    """Generates a crisp QR code image wrapped as a ReportLab Image flowable."""
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=2,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color=fill_color, back_color="#FFFFFF")
+    img_buf = io.BytesIO()
+    img.save(img_buf, format="PNG")
+    img_buf.seek(0)
+    return Image(img_buf, width=size_mm * mm, height=size_mm * mm)
+
+
+def _make_hiv_ribbon_drawing(size_mm: float = 12.0) -> Drawing:
+    """Draws a crisp vector Red & White HIV Awareness Ribbon icon."""
+    s = size_mm * mm
+    d = Drawing(s, s)
+    # Soft white circular badge behind the ribbon so it pops on Crimson header
+    # Left & right ribbon legs + top loop
+    d.add(
+        Polygon(
+            [
+                s * 0.22, s * 0.08,
+                s * 0.36, s * 0.08,
+                s * 0.68, s * 0.68,
+                s * 0.60, s * 0.88,
+                s * 0.44, s * 0.88,
+                s * 0.56, s * 0.66,
+            ],
+            fillColor=colors.white,
+            strokeColor=None,
+        )
+    )
+    d.add(
+        Polygon(
+            [
+                s * 0.78, s * 0.08,
+                s * 0.64, s * 0.08,
+                s * 0.32, s * 0.68,
+                s * 0.40, s * 0.88,
+                s * 0.56, s * 0.88,
+                s * 0.44, s * 0.66,
+            ],
+            fillColor=HexColor("#FEE2E2"),
+            strokeColor=None,
+        )
+    )
+    return d
+
+
+def _file_to_data_uri(path: str, mime: str = "image/png") -> str:
+    if not os.path.exists(path):
+        return ""
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
+def _qr_to_data_uri(data: str, fill_color: str = "#0F172A") -> str:
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=1,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color=fill_color, back_color="#FFFFFF")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{b64}"
+
+
+def _render_html_infographic_pdf(context: Dict[str, Any]) -> Optional[bytes]:
+    """Renders templates/infographic.html to A4 PDF using headless Chromium if installed."""
+    browser = shutil.which("chromium-browser") or shutil.which("chromium") or shutil.which("google-chrome")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    tpl_dir = os.path.join(base_dir, "templates")
+    if not browser or not os.path.exists(os.path.join(tpl_dir, "infographic.html")):
+        return None
+
+    env = Environment(loader=FileSystemLoader(tpl_dir), autoescape=True)
+    html = env.get_template("infographic.html").render(**context)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        html_path = os.path.join(tmpdir, "infographic.html")
+        pdf_path = os.path.join(tmpdir, "infographic.pdf")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html)
+        try:
+            subprocess.run(
+                [
+                    browser,
+                    "--headless",
+                    "--disable-gpu",
+                    "--no-sandbox",
+                    "--print-to-pdf-no-header",
+                    f"--print-to-pdf={pdf_path}",
+                    f"file://{html_path}",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
+                check=True,
+            )
+            if os.path.exists(pdf_path):
+                with open(pdf_path, "rb") as pf:
+                    data = pf.read()
+                if data.startswith(b"%PDF-"):
+                    return data
+        except Exception:
+            return None
+    return None
+
+
+def generate_infographic_pdf(static_url: Optional[str] = None) -> bytes:
+    """
+    Generates a vibrant, 1-page A4 Portrait Red & White HIV Awareness Month
+    Infographic PDF with partner logos, Open Wi-Fi QR, Static Student Portal QR & URL,
+    and simplified step-by-step instructions for Guidance Page posting and printing.
+    """
+    settings = get_all_settings()
+    event_title = settings.get("event_title", "HIV Awareness Seminar")
+    event_date = settings.get("event_date", "November 25, 2026")
+    venue = settings.get("venue", "ACLC College of Mandaue")
+
+    raw_url = (static_url or settings.get("kiosk_url") or "http://192.168.1.100:8080").strip()
+    if raw_url.lower().startswith("https://"):
+        raw_url = "http://" + raw_url[8:]
+    elif not raw_url.lower().startswith("http://"):
+        raw_url = "http://" + raw_url.lstrip("/")
+    portal_url = raw_url.rstrip("/")
+    display_host = re.sub(r"^https?://", "", portal_url, flags=re.IGNORECASE)
+    if display_host.endswith(":80"):
+        display_host = display_host[:-3]
+
+    ssids = []
+    for key in ("wifi_ssid", "wifi_ssid_2", "wifi_ssid_3"):
+        val = (settings.get(key) or "").strip()
+        if val and val not in ssids:
+            ssids.append(val)
+    if not ssids:
+        ssids = ["HIV Awareness Seminar 1"]
+    primary_ssid = ssids[0]
+    wifi_password = (settings.get("wifi_password") or "").strip()
+    wifi_auth = "WPA" if wifi_password else "nopass"
+    wifi_qr_payload = f"WIFI:S:{primary_ssid};T:{wifi_auth};P:{wifi_password};;"
+
+    try:
+        min_mins = int(float(settings.get("min_duration_minutes", "150") or "150"))
+    except ValueError:
+        min_mins = 150
+    hrs, rem_mins = divmod(min_mins, 60)
+    if hrs and rem_mins:
+        dur_label = f"{hrs} hrs {rem_mins} mins ({min_mins} mins)"
+    elif hrs:
+        dur_label = f"{hrs} hrs ({min_mins} mins)"
+    else:
+        dur_label = f"{min_mins} mins"
+
+    img_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img")
+    html_pdf = _render_html_infographic_pdf(
+        {
+            "event_title": event_title,
+            "event_date": event_date,
+            "venue": venue,
+            "display_host": display_host,
+            "ssids": ssids,
+            "wifi_password": wifi_password,
+            "dur_label": dur_label,
+            "wifi_qr_uri": _qr_to_data_uri(wifi_qr_payload, "#0F172A"),
+            "portal_qr_uri": _qr_to_data_uri(f"{portal_url}/", "#B91C1C"),
+            "logo_aclc": _file_to_data_uri(os.path.join(img_dir, "aclc-logo.png")),
+            "logo_guidance": _file_to_data_uri(os.path.join(img_dir, "guidance-logo.png")),
+            "logo_aclcert": _file_to_data_uri(os.path.join(img_dir, "aclcert-logo.png")),
+        }
+    )
+    if html_pdf:
+        return html_pdf
+
+    # Red & White HIV Awareness Month Palette
+    hiv_crimson = HexColor("#B91C1C")
+    hiv_dark_red = HexColor("#7F1D1D")
+    hiv_bright_red = HexColor("#DC2626")
+    hiv_rose_bg = HexColor("#FEF2F2")
+    hiv_rose_pill = HexColor("#FEE2E2")
+    hiv_border = HexColor("#FCA5A5")
+    slate_dark = HexColor("#0F172A")
+    slate_muted = HexColor("#334155")
+    open_green_bg = HexColor("#DCFCE7")
+    open_green_txt = HexColor("#166534")
+
+    buf = io.BytesIO()
+    page_w, _ = A4
+    margin_lr = 12 * mm
+    usable_w = page_w - (2 * margin_lr)
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=margin_lr,
+        rightMargin=margin_lr,
+        topMargin=10 * mm,
+        bottomMargin=11 * mm,
+        title=f"{event_title} - Attendance & Evaluation Guide",
+        author="ACLC College of Mandaue",
+    )
+
+    styles = getSampleStyleSheet()
+    st_ribbon_tag = ParagraphStyle(
+        "HivRibbonTag",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8.5,
+        leading=11,
+        textColor=hiv_rose_pill,
+        alignment=2,
+    )
+    st_hero_title = ParagraphStyle(
+        "HivHeroTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=21,
+        leading=24,
+        textColor=colors.white,
+    )
+    st_hero_tagline = ParagraphStyle(
+        "HivHeroTagline",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        leading=13,
+        textColor=hiv_rose_pill,
+    )
+    st_hero_meta = ParagraphStyle(
+        "HivHeroMeta",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8.8,
+        leading=12,
+        textColor=colors.white,
+    )
+    st_card_hdr = ParagraphStyle(
+        "HivCardHdr",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10.5,
+        leading=13,
+        textColor=colors.white,
+        alignment=1,
+    )
+    st_qr_sub = ParagraphStyle(
+        "HivQrSub",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8.5,
+        leading=11.5,
+        textColor=slate_muted,
+        alignment=1,
+    )
+    st_ssid_list = ParagraphStyle(
+        "HivSsidList",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9.2,
+        leading=12,
+        textColor=slate_dark,
+        alignment=1,
+    )
+    st_open_pill = ParagraphStyle(
+        "HivOpenPill",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8.8,
+        leading=11.5,
+        textColor=open_green_txt,
+        alignment=1,
+    )
+    st_pwd_pill = ParagraphStyle(
+        "HivPwdPill",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9.5,
+        leading=12,
+        textColor=hiv_dark_red,
+        alignment=1,
+    )
+    st_mono_box = ParagraphStyle(
+        "HivMonoBox",
+        parent=styles["Normal"],
+        fontName="Courier-Bold",
+        fontSize=12.5,
+        leading=15,
+        textColor=hiv_crimson,
+        alignment=1,
+    )
+    st_sec_hdr = ParagraphStyle(
+        "HivSecHdr",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        textColor=hiv_crimson,
+    )
+    st_step_num = ParagraphStyle(
+        "HivStepNum",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=13,
+        leading=15,
+        textColor=colors.white,
+        alignment=1,
+    )
+    st_step_title = ParagraphStyle(
+        "HivStepTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10.2,
+        leading=13,
+        textColor=hiv_dark_red,
+    )
+    st_step_body = ParagraphStyle(
+        "HivStepBody",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9,
+        leading=12.5,
+        textColor=slate_dark,
+    )
+    st_banner_note = ParagraphStyle(
+        "HivBannerNote",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8.5,
+        leading=11.5,
+        textColor=colors.white,
+        alignment=1,
+    )
+
+    elements: List[Any] = []
+
+    # 1. Bold Red & White HIV Awareness Month Hero Banner
+    img_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "img")
+    logo_cells: List[Any] = []
+    for fname in ("aclc-logo.png", "guidance-logo.png", "aclcert-logo.png"):
+        fpath = os.path.join(img_dir, fname)
+        if os.path.exists(fpath):
+            logo_cells.append(Image(fpath, width=13.5 * mm, height=13.5 * mm))
+
+    logos_strip = Table([logo_cells], colWidths=[15.5 * mm] * len(logo_cells)) if logo_cells else ""
+    if logos_strip:
+        logos_strip.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                    ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+                ]
+            )
+        )
+
+    ribbon_badge = Table(
+        [
+            [
+                Paragraph("HIV AWARENESS MONTH<br/><b>OFFICIAL EVENT GUIDE</b>", st_ribbon_tag),
+                _make_hiv_ribbon_drawing(11.5),
+            ]
+        ],
+        colWidths=[42 * mm, 13 * mm],
+    )
+    ribbon_badge.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+
+    top_bar = Table(
+        [[logos_strip, "", ribbon_badge]],
+        colWidths=[len(logo_cells) * 15.5 * mm + 2 * mm, usable_w - (len(logo_cells) * 15.5 * mm + 2 * mm) - 57 * mm - 16 * mm, 57 * mm],
+    )
+    top_bar.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+
+    hero_card = Table(
+        [
+            [top_bar],
+            [Paragraph(_xml_safe(event_title.upper()), st_hero_title)],
+            [Paragraph('&ldquo;KNOWLEDGE IS POWER, PREVENTION IS PROTECTION&rdquo;', st_hero_tagline)],
+            [
+                Paragraph(
+                    f"ATTENDANCE &amp; EVALUATION GUIDE &nbsp;&bull;&nbsp; {_xml_safe(event_date.upper())} &nbsp;&bull;&nbsp; {_xml_safe(venue.upper())}",
+                    st_hero_meta,
+                )
+            ],
+        ],
+        colWidths=[usable_w],
+    )
+    hero_card.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), hiv_crimson),
+                ("LINEBELOW", (0, -1), (-1, -1), 3, hiv_dark_red),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (0, 0), 8),
+                ("TOPPADDING", (0, 1), (0, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (0, -2), 2),
+                ("BOTTOMPADDING", (0, -1), (0, -1), 9),
+            ]
+        )
+    )
+    elements.append(hero_card)
+    elements.append(Spacer(1, 4.5 * mm))
+
+    # 2. Side-by-Side QR Cards (White Cards with Crimson Accents)
+    col_w = (usable_w - 6 * mm) / 2.0
+    wifi_qr_img = _make_qr_flowable(wifi_qr_payload, size_mm=37.0, fill_color="#0F172A")
+    portal_qr_img = _make_qr_flowable(f"{portal_url}/", size_mm=37.0, fill_color="#B91C1C")
+
+    ssid_html = "<br/>".join(_xml_safe(s) for s in ssids)
+    if wifi_password:
+        auth_pill = Table([[Paragraph(f"Password: {_xml_safe(wifi_password)}", st_pwd_pill)]], colWidths=[col_w - 14 * mm])
+        auth_pill.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), hiv_rose_pill),
+                    ("BOX", (0, 0), (-1, -1), 0.8, hiv_border),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
+    else:
+        auth_pill = Table([[Paragraph("OPEN NETWORK (NO PASSWORD)", st_open_pill)]], colWidths=[col_w - 14 * mm])
+        auth_pill.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), open_green_bg),
+                    ("BOX", (0, 0), (-1, -1), 0.8, open_green_txt),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
+
+    wifi_card = Table(
+        [
+            [Paragraph("1. SCAN TO JOIN WI-FI", st_card_hdr)],
+            [wifi_qr_img],
+            [Paragraph("Connect to any available network:", st_qr_sub)],
+            [Paragraph(ssid_html, st_ssid_list)],
+            [auth_pill],
+            [Paragraph('<i>If prompted "No Internet", tap <b>Stay Connected</b>.</i>', st_qr_sub)],
+        ],
+        colWidths=[col_w],
+    )
+    wifi_card.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), hiv_crimson),
+                ("BACKGROUND", (0, 1), (0, -1), colors.white),
+                ("BOX", (0, 0), (-1, -1), 1.2, hiv_crimson),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (0, 0), 6),
+                ("BOTTOMPADDING", (0, 0), (0, 0), 6),
+                ("TOPPADDING", (0, 1), (0, 1), 6),
+                ("BOTTOMPADDING", (0, 1), (0, 1), 3),
+                ("TOPPADDING", (0, 2), (0, -1), 2),
+                ("BOTTOMPADDING", (0, 2), (0, -2), 2),
+                ("BOTTOMPADDING", (0, -1), (0, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    url_pill = Table([[Paragraph(_xml_safe(display_host), st_mono_box)]], colWidths=[col_w - 14 * mm])
+    url_pill.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), hiv_rose_bg),
+                ("BOX", (0, 0), (-1, -1), 1.0, hiv_crimson),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+
+    portal_card = Table(
+        [
+            [Paragraph("2. SCAN TO OPEN PORTAL", st_card_hdr)],
+            [portal_qr_img],
+            [Paragraph("Or open Chrome / Safari and type this link:", st_qr_sub)],
+            [url_pill],
+            [Paragraph("<i>No https:// needed. Works 100% offline on event Wi-Fi.</i>", st_qr_sub)],
+        ],
+        colWidths=[col_w],
+    )
+    portal_card.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), hiv_dark_red),
+                ("BACKGROUND", (0, 1), (0, -1), colors.white),
+                ("BOX", (0, 0), (-1, -1), 1.2, hiv_dark_red),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (0, 0), 6),
+                ("BOTTOMPADDING", (0, 0), (0, 0), 6),
+                ("TOPPADDING", (0, 1), (0, 1), 6),
+                ("BOTTOMPADDING", (0, 1), (0, 1), 4),
+                ("TOPPADDING", (0, 2), (0, -1), 3),
+                ("BOTTOMPADDING", (0, 2), (0, -2), 3),
+                ("BOTTOMPADDING", (0, -1), (0, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+
+    qr_row = Table([[wifi_card, "", portal_card]], colWidths=[col_w, 6 * mm, col_w])
+    qr_row.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    elements.append(qr_row)
+    elements.append(Spacer(1, 5 * mm))
+
+    # 3. Easy 4-Step Flow
+    elements.append(Paragraph("HOW IT WORKS &mdash; 4 EASY STEPS", st_sec_hdr))
+    elements.append(Spacer(1, 2.5 * mm))
+
+    steps = [
+        (
+            "1",
+            "Time In &amp; Save Your QR Pass",
+            f"Open <b>{_xml_safe(display_host)}</b> &rarr; Enter your <b>Student ID, Full Name, Course/Strand &amp; Email</b> &rarr; Tap <b>Submit Time In</b> &rarr; <b>Screenshot your QR Pass</b>.",
+        ),
+        (
+            "2",
+            "Take Evaluation (When Announced)",
+            f"Open <b>{_xml_safe(display_host)}</b> &rarr; Click <b>&ldquo;My Passes&rdquo;</b> at the top &rarr; Under your QR Pass, click <b>&ldquo;Take Seminar Evaluation&rdquo;</b> &rarr; Answer &amp; Submit.",
+        ),
+        (
+            "3",
+            "Time Out Before Leaving",
+            "Open <b>&ldquo;My Passes&rdquo;</b> (or show your saved QR screenshot) at the <b>Exit Scanner</b> so an officer can scan your Time Out.",
+        ),
+        (
+            "4",
+            "Earn Your Certificate",
+            f"Complete at least <b>{_xml_safe(dur_label)}</b> of attendance <b>+</b> submit the <b>Evaluation Form</b> to receive your official Certificate of Participation.",
+        ),
+    ]
+
+    for idx, (num, title, body) in enumerate(steps):
+        row_bg = colors.white if idx % 2 == 0 else hiv_rose_bg
+        step_tbl = Table(
+            [
+                [
+                    Paragraph(num, st_step_num),
+                    [
+                        Paragraph(title, st_step_title),
+                        Spacer(1, 0.8 * mm),
+                        Paragraph(body, st_step_body),
+                    ],
+                ]
+            ],
+            colWidths=[11 * mm, usable_w - 11 * mm],
+        )
+        step_tbl.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (0, 0), hiv_crimson),
+                    ("BACKGROUND", (1, 0), (1, 0), row_bg),
+                    ("BOX", (0, 0), (-1, -1), 0.9, hiv_border),
+                    ("VALIGN", (0, 0), (0, 0), "MIDDLE"),
+                    ("VALIGN", (1, 0), (1, 0), "TOP"),
+                    ("LEFTPADDING", (0, 0), (0, 0), 2),
+                    ("RIGHTPADDING", (0, 0), (0, 0), 2),
+                    ("LEFTPADDING", (1, 0), (1, 0), 8),
+                    ("RIGHTPADDING", (1, 0), (1, 0), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5.5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5.5),
+                ]
+            )
+        )
+        elements.append(step_tbl)
+        elements.append(Spacer(1, 2.2 * mm))
+
+    elements.append(Spacer(1, 1.5 * mm))
+
+    # 4. Bottom Red Reminder Strip
+    bottom_bar = Table(
+        [
+            [
+                Paragraph(
+                    "100% OFFLINE (NO MOBILE DATA NEEDED) &nbsp;&bull;&nbsp; DOUBLE-CHECK YOUR FULL NAME &amp; EMAIL FOR CERTIFICATES",
+                    st_banner_note,
+                )
+            ]
+        ],
+        colWidths=[usable_w],
+    )
+    bottom_bar.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), hiv_dark_red),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    elements.append(bottom_bar)
+
+    footer_left = f"ACLC College of Mandaue  |  {event_title}  |  Static Portal: {display_host}"
     doc.build(
         elements,
         onFirstPage=lambda c, d: _draw_footer(c, d, footer_left),

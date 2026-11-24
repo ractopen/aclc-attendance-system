@@ -50,6 +50,7 @@ from print_fallback_service import (
     generate_blank_evaluation_pdf,
     generate_filled_attendance_pdf,
     generate_filled_evaluations_pdf,
+    generate_infographic_pdf,
 )
 import qrcode
 
@@ -2073,6 +2074,19 @@ def print_filled_evaluation_answers(request: Request):
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename=ACLC_Evaluation_Answers_{datetime.now().strftime('%Y%m%d')}.pdf"},
+    )
+
+
+@app.get("/api/print/infographic.pdf")
+def print_event_infographic(request: Request):
+    if not check_admin_auth(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    kiosk_url = _normalize_http_kiosk_url(get_setting("kiosk_url", ""))
+    pdf_bytes = generate_infographic_pdf(static_url=kiosk_url or get_base_url(request))
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=ACLC_Attendance_Evaluation_Infographic.pdf"},
     )
 
 

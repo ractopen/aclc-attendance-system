@@ -406,7 +406,7 @@
             <div class="col-md-5 col-12">
               <label class="form-label">Grade Level</label>
               <select class="form-select" id="shs_grade" name="shs_grade">
-                <option value="">Auto from section</option>
+                <option value="">Select grade level</option>
                 <option value="Grade 11">Grade 11</option>
                 <option value="Grade 12">Grade 12</option>
               </select>
@@ -414,7 +414,7 @@
             <div class="col-md-7 col-12">
               <label class="form-label">Strand</label>
               <select class="form-select" id="strand" name="strand">
-                <option value="">Auto from section</option>
+                <option value="">Select strand</option>
                 <option value="STEM">STEM</option>
                 <option value="TVL-ICT">TVL-ICT</option>
                 <option value="TVL-HE">TVL-HE</option>
@@ -430,7 +430,7 @@
             <div class="col-md-5 col-12">
               <label class="form-label">Year Level</label>
               <select class="form-select" id="college_year" name="college_year">
-                <option value="">Auto from section</option>
+                <option value="">Select year level</option>
                 <option value="1st Year">1st Year</option>
                 <option value="2nd Year">2nd Year</option>
                 <option value="3rd Year">3rd Year</option>
@@ -440,7 +440,7 @@
             <div class="col-md-7 col-12">
               <label class="form-label">Course</label>
               <select class="form-select" id="course" name="course">
-                <option value="">Auto from section</option>
+                <option value="">Select course</option>
                 <option value="BSCS">BSCS</option>
                 <option value="BSIT">BSIT</option>
                 <option value="BSBA">BSBA</option>
@@ -458,12 +458,13 @@
             <small class="text-muted">Your certificate will be emailed here once duration (<span class="min-dur-text">{{ min_duration_label }}</span>) and evaluation are complete.</small>
           </div>
 
-          <!-- Optional Student ID / USN (Single clean input) -->
+          <!-- Optional Student ID / USN / LRN (Single clean input with non-intrusive autocomplete) -->
           <div class="mb-3">
             <input type="hidden" id="id_type" name="id_type" value="Student ID Number">
-            <label class="form-label mb-1" id="lblId">Student ID Number / USN <span class="text-muted fw-normal">(Optional)</span></label>
-            <input type="text" class="form-control text-uppercase font-monospace" id="student_id" name="student_id" placeholder="e.g. C24-01234 (leave blank if none)" maxlength="50">
-            <small class="text-muted d-block mt-1">No ID yet? Leave blank &mdash; a temporary Pass ID will be generated.</small>
+            <label class="form-label mb-1" id="lblId">Student ID Number / USN / LRN <span class="text-muted fw-normal">(Optional)</span></label>
+            <input type="text" class="form-control text-uppercase font-monospace" id="student_id" name="student_id" placeholder="e.g. C26-01-15099-MAN121, USN, or LRN" maxlength="50" autocomplete="off">
+            <div id="studentIdSuggestions" class="d-none mt-2 d-flex flex-wrap gap-1"></div>
+            <small id="studentIdHint" class="text-muted d-block mt-1">No ID yet? Leave blank &mdash; a temporary Pass ID will be generated.</small>
           </div>
 
           <!-- Optional Demographics: Sex & Age (At bottom for fast <30s Time In) -->
@@ -1090,18 +1091,140 @@ document.addEventListener("DOMContentLoaded", function() {
   }
   const studentIdInputEl = document.getElementById("student_id");
   const idTypeSelectEl = document.getElementById("id_type");
+  const studentIdSuggestionsEl = document.getElementById("studentIdSuggestions");
+  const studentIdHintEl = document.getElementById("studentIdHint");
+
+  let prevStudentIdVal = "";
+  let idAutoFillSuppressed = false;
 
   function updateIdTypeUI() {
     if (!lblId || !studentIdInputEl || !idTypeSelectEl) return;
     const chosen = idTypeSelectEl.value || "Student ID Number";
-    lblId.innerHTML = `${chosen} <span class="text-muted fw-normal">(Optional)</span>`;
-    if (chosen === "USN") {
-      studentIdInputEl.placeholder = "e.g. 24001234567 (leave blank if none)";
-    } else if (chosen === "ID Number") {
+    if (chosen === "ID Number") {
+      lblId.innerHTML = `ID Number <span class="text-muted fw-normal">(Optional)</span>`;
       studentIdInputEl.placeholder = "e.g. ID-001 or FACULTY-01 (leave blank if none)";
+    } else if (chosen === "USN") {
+      lblId.innerHTML = `USN <span class="text-muted fw-normal">(Optional)</span>`;
+      studentIdInputEl.placeholder = "e.g. 25001022200 (leave blank if none)";
     } else {
-      studentIdInputEl.placeholder = "e.g. C24-01234 (leave blank if none)";
+      lblId.innerHTML = `Student ID Number / USN / LRN <span class="text-muted fw-normal">(Optional)</span>`;
+      studentIdInputEl.placeholder = "e.g. C26-01-15099-MAN121, USN, or LRN";
     }
+  }
+
+  function updateIdFormatHint(val) {
+    if (!studentIdHintEl) return;
+    if (!val) {
+      studentIdHintEl.textContent = "No ID yet? Leave blank — a temporary Pass ID will be generated.";
+      return;
+    }
+    if (/^C\d/i.test(val)) {
+      studentIdHintEl.textContent = "Temporary ID format (e.g. C26-01-15099-MAN121)";
+    } else if (/^\d+$/.test(val)) {
+      studentIdHintEl.textContent = "Numeric ID (USN / LRN)";
+    } else {
+      studentIdHintEl.textContent = "Custom / School ID";
+    }
+  }
+
+  function renderIdSuggestions(val) {
+    if (!studentIdSuggestionsEl || !studentIdInputEl) return;
+    const chips = [];
+    if (/^C\d{2}-$/.test(val)) {
+      chips.push({ label: "01-", append: "01-" });
+    } else if (/^C\d{2}-\d{2}-\d+$/.test(val)) {
+      chips.push({ label: "-MAN121", append: "-MAN121" });
+    }
+
+    if (chips.length === 0) {
+      studentIdSuggestionsEl.classList.add("d-none");
+      studentIdSuggestionsEl.innerHTML = "";
+      return;
+    }
+
+    studentIdSuggestionsEl.innerHTML = "";
+    chips.forEach(chip => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-sm btn-outline-primary py-1 px-2 fw-bold font-monospace";
+      btn.style.fontSize = "0.78rem";
+      btn.textContent = chip.label;
+      btn.addEventListener("mousedown", function(e) {
+        e.preventDefault();
+        const next = (studentIdInputEl.value || "").toUpperCase() + chip.append;
+        studentIdInputEl.value = next;
+        prevStudentIdVal = next;
+        idAutoFillSuppressed = false;
+        studentIdInputEl.focus();
+        const end = next.length;
+        if (typeof studentIdInputEl.setSelectionRange === "function") {
+          studentIdInputEl.setSelectionRange(end, end);
+        }
+        renderIdSuggestions(next);
+        updateIdFormatHint(next);
+      });
+      studentIdSuggestionsEl.appendChild(btn);
+    });
+    studentIdSuggestionsEl.classList.remove("d-none");
+  }
+
+  function resetStudentIdAutocomplete() {
+    prevStudentIdVal = "";
+    idAutoFillSuppressed = false;
+    if (studentIdSuggestionsEl) {
+      studentIdSuggestionsEl.classList.add("d-none");
+      studentIdSuggestionsEl.innerHTML = "";
+    }
+    updateIdFormatHint("");
+  }
+
+  if (studentIdInputEl) {
+    studentIdInputEl.addEventListener("input", function(e) {
+      const raw = this.value || "";
+      const upper = raw.toUpperCase();
+      const inputType = (e && e.inputType) || "";
+      const isDeleting = upper.length < prevStudentIdVal.length || inputType.startsWith("delete");
+      const isPaste = inputType.startsWith("insertFromPaste") || inputType.startsWith("insertFromDrop");
+      const atEnd = this.selectionStart === raw.length && this.selectionEnd === raw.length;
+
+      let nextVal = upper;
+
+      if (upper === "") {
+        idAutoFillSuppressed = false;
+      } else if (isDeleting) {
+        idAutoFillSuppressed = true;
+      } else if (!idAutoFillSuppressed && !isPaste && atEnd) {
+        if (/^C\d{2}$/.test(upper) || /^C\d{2}-\d{2}$/.test(upper)) {
+          nextVal = upper + "-";
+        } else if (/^C\d{2}-\d{2}-\d{5}$/.test(upper)) {
+          nextVal = upper + "-MAN121";
+        }
+      }
+
+      if (nextVal !== raw) {
+        const curPos = this.selectionStart;
+        this.value = nextVal;
+        if (nextVal.length > upper.length && typeof this.setSelectionRange === "function") {
+          this.setSelectionRange(nextVal.length, nextVal.length);
+        } else if (typeof curPos === "number" && typeof this.setSelectionRange === "function") {
+          this.setSelectionRange(curPos, curPos);
+        }
+      }
+
+      prevStudentIdVal = nextVal;
+      renderIdSuggestions(nextVal);
+      updateIdFormatHint(nextVal);
+    });
+
+    studentIdInputEl.addEventListener("focus", function() {
+      renderIdSuggestions((this.value || "").toUpperCase());
+    });
+
+    studentIdInputEl.addEventListener("blur", function() {
+      setTimeout(() => {
+        if (studentIdSuggestionsEl) studentIdSuggestionsEl.classList.add("d-none");
+      }, 150);
+    });
   }
 
   const shsDetailsRow = document.getElementById("shsDetailsRow");
@@ -2202,6 +2325,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
           // Reset form so a classmate sharing the phone can also register
           attendanceForm.reset();
+          resetStudentIdAutocomplete();
           submitBtn.disabled = false;
           submitBtn.innerText = "Time In";
           updateCategoryLabels();
