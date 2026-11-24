@@ -377,8 +377,16 @@ def get_local_ip() -> str:
     _CACHED_LOCAL_IP_TS = now_ts
     return detected
 
+_CACHED_WIFI_SSID: Optional[str] = None
+_CACHED_WIFI_SSID_TS: float = 0.0
+
 def get_host_wifi_ssid() -> str:
-    """Detects active Wi-Fi SSID on host machine (cross-platform, fail-safe)."""
+    """Detects active Wi-Fi SSID on host machine (cross-platform, fail-safe, cached 15s)."""
+    global _CACHED_WIFI_SSID, _CACHED_WIFI_SSID_TS
+    now_ts = datetime.now().timestamp()
+    if _CACHED_WIFI_SSID is not None and (now_ts - _CACHED_WIFI_SSID_TS) < 15.0:
+        return _CACHED_WIFI_SSID
+
     ssid = ""
     if sys.platform.startswith("linux"):
         try:
@@ -419,6 +427,8 @@ def get_host_wifi_ssid() -> str:
                         break
         except Exception:
             pass
+    _CACHED_WIFI_SSID = ssid
+    _CACHED_WIFI_SSID_TS = now_ts
     return ssid
 
 def _get_configured_wifi_ssids() -> List[str]:
@@ -1448,8 +1458,11 @@ def admin_network_status(request: Request):
 
 @app.post("/api/admin/network-connect")
 def admin_network_connect(request: Request):
+    global _CACHED_WIFI_SSID, _CACHED_WIFI_SSID_TS
     if not check_admin_auth(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
+    _CACHED_WIFI_SSID = None
+    _CACHED_WIFI_SSID_TS = 0.0
     target_ssid = get_setting("wifi_ssid", "HIV Awareness Attendance")
     if sys.platform.startswith("linux"):
         try:
